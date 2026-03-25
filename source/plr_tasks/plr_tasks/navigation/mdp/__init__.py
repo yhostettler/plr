@@ -1,1 +1,2 @@
-from .observations import fixed_binary_2x2
+from .observations import binary_map_2x2
+from .events import reset_binary_map_2x2
