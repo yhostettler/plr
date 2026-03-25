@@ -10,3 +10,5 @@ plr_tasks/navigation/__init__.py
 plr_tasks/navigation/plr_nav_env_cfg.py
 plr_tasks/navigation/agents/__init__.py
 plr_tasks/navigation/agents/rsl_rl_cfg.py
+plr_tasks/navigation/mdp/__init__.py
+plr_tasks/navigation/mdp/observations.py
