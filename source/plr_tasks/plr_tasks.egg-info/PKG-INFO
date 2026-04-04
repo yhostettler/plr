@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: plr_tasks
-Version: 0.1.0
-Summary: PLR custom Isaac Lab tasks
-Author: PLR team
-Requires-Python: >=3.10
-Dynamic: author
-Dynamic: requires-python
-Dynamic: summary
