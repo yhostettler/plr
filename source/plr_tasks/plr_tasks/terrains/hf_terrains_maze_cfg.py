@@ -109,3 +109,10 @@ class HfMazeTerrainCfg(HfTerrainBaseCfg):
     """
 
 
+### PLR ###
+@configclass  
+class HfFlatTerrainCfg(HfMazeTerrainCfg):  
+    """Configuration for flat terrain."""  
+    terrain_type = "flat"  
+    non_maze_terrain = True  
+    random_wall_ratio = 1.0  # No walls

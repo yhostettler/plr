@@ -153,7 +153,7 @@ class ActionsCfg:
             asset_name="robot", joint_names=[".*HAA", ".*HFE", ".*KFE"], scale=0.5, use_default_offset=True
         ),
         low_level_velocity_action=mdp.JointVelocityActionCfg(
-            asset_name="robot", joint_names=[".*WHEEL"], scale=5.0, use_default_offset=True
+            asset_name="robot", joint_names=[".*HAA", ".*HFE", ".*KFE"], scale=0.5, use_default_offset=True
         ),
         low_level_decimation=4,
         low_level_policy_file=os.path.join(

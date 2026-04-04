@@ -712,3 +712,29 @@ def _generate_pit_obstacle(
         # Random obstacle type (pillar, cross, block) with moderate pit probability
         is_pit = rng.random() < OBSTACLES.PITS_RANDOM_PIT_PROB
         return make_random_obstacle(rng, cell_pixels, wall_height, is_pit=is_pit)
+
+
+
+
+
+### PLR ###
+# Add this function to hf_terrains_maze.py  
+def flat_terrain(cfg: HfMazeTerrainCfg, device: str) -> TerrainData:  
+    """Generate completely flat terrain for velocity tracking."""  
+    width = cfg.size[0] / cfg.horizontal_scale  
+    height = cfg.size[1] / cfg.horizontal_scale  
+      
+    # Create flat height field  
+    heights = torch.zeros((int(width), int(height)), device=device)  
+      
+    # All positions are valid for goals and spawns  
+    valid_mask = torch.ones_like(heights, dtype=torch.bool)  
+    spawn_mask = torch.ones_like(heights, dtype=torch.bool)  
+    platform_mask = torch.zeros_like(heights, dtype=torch.bool)  
+      
+    return TerrainData(  
+        heights=heights,  
+        valid_mask=valid_mask,  
+        spawn_mask=spawn_mask,  
+        platform_mask=platform_mask  
+    )
