@@ -68,7 +68,6 @@ from rsl_rl.runners import OnPolicyRunner
 # Import Isaac Lab extensions
 import isaaclab_tasks  # noqa: F401
 import plr_tasks  # noqa: F401
-import plr_tasks  # noqa: F401
 
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.utils.dict import print_dict
