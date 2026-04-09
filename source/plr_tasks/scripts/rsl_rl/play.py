@@ -1,189 +1,271 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
+"""Play a trained navigation policy (PPO/MDPO) with automatic checkpoint loading.
 
-"""Script to play a checkpoint if an RL agent from RSL-RL."""
+Usage:
+    python scripts/play.py --task <task_name> [options]
 
-"""Launch Isaac Sim Simulator first."""
+Arguments:
+    --task                   Task name (required, typically *-Play-v0 variant)
+    --checkpoint             Path to model checkpoint (.pt file)
+    --use_last_checkpoint    Use latest checkpoint from logs (default behavior)
+    --num_envs              Number of parallel environments
+    --video                 Enable video recording
+    --video_length          Video length in steps (default: 200)
+
+Examples:
+    python scripts/play.py --task Isaac-Navigation-B2W-Play-v0
+    python scripts/play.py --task Isaac-Navigation-B2W-Play-v0 --checkpoint path/to/model.pt
+    python scripts/play.py --task Isaac-Navigation-B2W-Play-v0 --video --num_envs 16
+
+Note: Automatically finds latest checkpoint if --checkpoint not specified.
+"""
+
+from __future__ import annotations
 
 import argparse
 import sys
 
 from isaaclab.app import AppLauncher
 
-# local imports
-import cli_args  # isort: skip
-
-# add argparse arguments
-parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
-parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
+# Add argparse arguments
+parser = argparse.ArgumentParser(description="Play a trained navigation policy with RSL-RL.")
+parser.add_argument("--video", action="store_true", default=False, help="Record videos during play.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
-parser.add_argument(
-    "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
-)
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
-parser.add_argument(
-    "--use_pretrained_checkpoint",
-    action="store_true",
-    help="Use the pre-trained checkpoint from Nucleus.",
-)
-parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
-# append RSL-RL cli arguments
-cli_args.add_rsl_rl_args(parser)
-# append AppLauncher cli args
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
+parser.add_argument("--use_last_checkpoint", action="store_true", help="Use last checkpoint from logs.")
+parser.add_argument("--export_jit", action="store_true", default=False, help="Export policy as JIT module.")
+parser.add_argument("--export_onnx", action="store_true", default=False, help="Export policy as ONNX model.")
+
+# Append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
 args_cli, hydra_args = parser.parse_known_args()
-# always enable cameras to record video
-if args_cli.video:
-    args_cli.enable_cameras = True
 
-# clear out sys.argv for Hydra
-sys.argv = [sys.argv[0]] + hydra_args
+# Always enable cameras
+args_cli.enable_cameras = True
 
-# launch omniverse app
+# Launch simulation
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-"""Rest everything follows."""
-
+# Import after launching simulation
 import gymnasium as gym
 import os
-import time
+import re
 import torch
 
 from rsl_rl.runners import OnPolicyRunner
 
-from isaaclab.envs import (
-    DirectMARLEnv,
-    DirectMARLEnvCfg,
-    DirectRLEnvCfg,
-    ManagerBasedRLEnvCfg,
-    multi_agent_to_single_agent,
-)
-from isaaclab.utils.assets import retrieve_file_path
-from isaaclab.utils.dict import print_dict
-from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
-
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
-
+# Import Isaac Lab extensions
 import isaaclab_tasks  # noqa: F401
-import plr_tasks
-from isaaclab_tasks.utils import get_checkpoint_path
-from isaaclab_tasks.utils.hydra import hydra_task_config
+import plr_tasks  # noqa: F401
 
-# PLACEHOLDER: Extension template (do not remove this comment)
+from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper, export_policy_as_onnx
 
 
-@hydra_task_config(args_cli.task, "rsl_rl_cfg_entry_point")
-def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlOnPolicyRunnerCfg):
-    """Play with RSL-RL agent."""
-    task_name = args_cli.task.split(":")[-1]
-    # override configurations with non-hydra CLI arguments
-    agent_cfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
-    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+def find_latest_checkpoint(log_path: str, checkpoint_pattern: str = "model_.*.pt") -> str:
+    """Find the latest checkpoint file in the log directory.
 
-    # set the environment seed
-    # note: certain randomizations occur in the environment initialization so we set the seed here
-    env_cfg.seed = agent_cfg.seed
-    env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    Args:
+        log_path: Base log directory path
+        checkpoint_pattern: Regex pattern for checkpoint files
 
-    # specify directory for logging experiments
-    log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
-    log_root_path = os.path.abspath(log_root_path)
-    print(f"[INFO] Loading experiment from directory: {log_root_path}")
-    if args_cli.use_pretrained_checkpoint:
-        resume_path = get_published_pretrained_checkpoint("rsl_rl", task_name)
-        if not resume_path:
-            print("[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task.")
-            return
-    elif args_cli.checkpoint:
-        resume_path = retrieve_file_path(args_cli.checkpoint)
+    Returns:
+        Path to the latest checkpoint file
+    """
+    # Find all run directories
+    if not os.path.exists(log_path):
+        raise ValueError(f"Log path does not exist: {log_path}")
+
+    run_dirs = []
+    for entry in os.scandir(log_path):
+        if entry.is_dir() and re.match(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}", entry.name):
+            run_dirs.append(entry.name)
+
+    if not run_dirs:
+        raise ValueError(f"No run directories found in: {log_path}")
+
+    # Sort to get latest run
+    run_dirs.sort()
+    latest_run = run_dirs[-1]
+    run_path = os.path.join(log_path, latest_run)
+
+    # Find checkpoint files
+    checkpoint_files = []
+    for f in os.listdir(run_path):
+        if re.match(checkpoint_pattern, f):
+            checkpoint_files.append(f)
+
+    if not checkpoint_files:
+        raise ValueError(f"No checkpoint files matching '{checkpoint_pattern}' found in: {run_path}")
+
+    # Sort to get latest checkpoint
+    checkpoint_files.sort(key=lambda m: f"{m:0>15}")
+    latest_checkpoint = checkpoint_files[-1]
+
+    return os.path.join(run_path, latest_checkpoint)
+
+
+def load_checkpoint_with_fallback(runner: OnPolicyRunner, checkpoint_path: str, load_optimizer: bool = True):
+    """Load checkpoint with fallback for PyTorch compatibility issues.
+
+    Args:
+        runner: RSL-RL runner instance
+        checkpoint_path: Path to checkpoint file
+        load_optimizer: Whether to load optimizer state
+    """
+    print(f"[INFO] Loading checkpoint from: {checkpoint_path}")
+
+    # Load checkpoint to CPU first for compatibility
+    loaded_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+
+    # Load model state - handle both standard algorithms (PPO) and MDPO
+    if runner.is_mdpo:
+        # MDPO uses two actor-critics, load same state into both
+        runner.alg.actor_critic_1.load_state_dict(loaded_dict["model_state_dict"], strict=True)
+        runner.alg.actor_critic_2.load_state_dict(loaded_dict["model_state_dict"], strict=True)
     else:
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        # Standard algorithms use one actor-critic
+        runner.alg.actor_critic.load_state_dict(loaded_dict["model_state_dict"], strict=True)
 
-    log_dir = os.path.dirname(resume_path)
+    # Load normalizers if using empirical normalization
+    if runner.empirical_normalization:
+        runner.obs_normalizer.load_state_dict(loaded_dict["obs_norm_state_dict"])
+        runner.critic_obs_normalizer.load_state_dict(loaded_dict["critic_obs_norm_state_dict"])
 
-    # create isaac environment
+    # Load optimizer if requested
+    if load_optimizer:
+        if runner.is_mdpo:
+            runner.alg.optimizer_1.load_state_dict(loaded_dict["optimizer_state_dict"])
+        else:
+            runner.alg.optimizer.load_state_dict(loaded_dict["optimizer_state_dict"])
+
+    runner.current_learning_iteration = loaded_dict["iter"]
+    print(f"[INFO] Loaded checkpoint from iteration {loaded_dict['iter']}")
+
+
+def export_policy_jit(runner: OnPolicyRunner, checkpoint_path: str):
+    """Export policy as JIT module to an 'export' folder next to the checkpoint.
+
+    Args:
+        runner: RSL-RL runner instance with loaded policy
+        checkpoint_path: Path to the checkpoint file (used to determine export location)
+    """
+    # Determine export directory (create 'export' folder in the same directory as checkpoint)
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    export_dir = os.path.join(checkpoint_dir, "export")
+
+    # Get the actor-critic module
+    if runner.is_mdpo:
+        actor_critic = runner.alg.actor_critic_1
+    else:
+        actor_critic = runner.alg.actor_critic
+
+    # Get normalizer if using empirical normalization
+    normalizer = runner.obs_normalizer if runner.empirical_normalization else None
+
+    # Export using the module's export_jit method
+    print(f"[INFO] Exporting JIT policy to: {export_dir}")
+    actor_critic.export_jit(path=export_dir, filename="policy.pt", normalizer=normalizer)
+    print(f"[INFO] JIT export complete!")
+
+
+def export_policy_onnx(runner: OnPolicyRunner, checkpoint_path: str):
+    """Export policy as ONNX model to an 'export' folder next to the checkpoint.
+
+    Args:
+        runner: RSL-RL runner instance with loaded policy
+        checkpoint_path: Path to the checkpoint file (used to determine export location)
+    """
+    # Determine export directory (create 'export' folder in the same directory as checkpoint)
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    export_dir = os.path.join(checkpoint_dir, "export")
+
+    # Get the actor-critic module
+    if runner.is_mdpo:
+        actor_critic = runner.alg.actor_critic_1
+    else:
+        actor_critic = runner.alg.actor_critic
+
+    # Get normalizer if using empirical normalization
+    normalizer = runner.obs_normalizer if runner.empirical_normalization else None
+
+    # Check if the module has export_onnx method
+    if not hasattr(actor_critic, "export_onnx"):
+        raise NotImplementedError(
+            f"ONNX export not implemented for {type(actor_critic).__name__}. "
+            "Please add an export_onnx method to this module."
+        )
+
+    # Export using the module's export_onnx method
+    print(f"[INFO] Exporting ONNX policy to: {export_dir}")
+    actor_critic.export_onnx(path=export_dir, filename="policy.onnx", normalizer=normalizer)
+    print(f"[INFO] ONNX export complete!")
+
+
+def main():
+    """Play navigation policy with RSL-RL."""
+    # Parse command-line arguments
+    spec = gym.spec(args_cli.task)
+    env_cfg_class = spec.kwargs.get("env_cfg_entry_point")
+    agent_cfg_class = spec.kwargs.get("rsl_rl_cfg_entry_point")
+
+    # Instantiate the configs
+    env_cfg: ManagerBasedRLEnvCfg = env_cfg_class()
+    agent_cfg: RslRlOnPolicyRunnerCfg = agent_cfg_class()
+
+    # Override config from command line
+    if args_cli.num_envs is not None:
+        env_cfg.scene.num_envs = args_cli.num_envs
+
+    # Create the environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
-
-    # convert to single-agent instance if required by the RL algorithm
-    if isinstance(env.unwrapped, DirectMARLEnv):
-        env = multi_agent_to_single_agent(env)
-
-    # wrap for video recording
-    if args_cli.video:
-        video_kwargs = {
-            "video_folder": os.path.join(log_dir, "videos", "play"),
-            "step_trigger": lambda step: step == 0,
-            "video_length": args_cli.video_length,
-            "disable_logger": True,
-        }
-        print("[INFO] Recording videos during training.")
-        print_dict(video_kwargs, nesting=4)
-        env = gym.wrappers.RecordVideo(env, **video_kwargs)
-
-    # wrap around environment for rsl-rl
+    # Wrap the environment
     env = RslRlVecEnvWrapper(env)
 
-    print(f"[INFO]: Loading model checkpoint from: {resume_path}")
-    # load previously trained model
-    ppo_runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
-    ppo_runner.load(resume_path)
+    # Get checkpoint path
+    if args_cli.checkpoint:
+        resume_path = args_cli.checkpoint
+    else:
+        # Get last checkpoint from log directory
+        log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
+        resume_path = find_latest_checkpoint(log_root_path, checkpoint_pattern="model_.*.pt")
 
-    # obtain the trained policy for inference
-    policy = ppo_runner.get_inference_policy(device=env.unwrapped.device)
+    # Create runner
+    runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
 
-    # extract the neural network module
-    # we do this in a try-except to maintain backwards compatibility.
-    try:
-        # version 2.3 onwards
-        policy_nn = ppo_runner.alg.policy
-    except AttributeError:
-        # version 2.2 and below
-        policy_nn = ppo_runner.alg.actor_critic
+    # Load checkpoint with compatibility handling
+    load_checkpoint_with_fallback(runner, resume_path)
 
-    # export policy to onnx/jit
-    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    export_policy_as_jit(policy_nn, ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.pt")
-    export_policy_as_onnx(
-        policy_nn, normalizer=ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
-    )
+    # Export JIT if requested
+    if args_cli.export_jit:
+        export_policy_jit(runner, resume_path)
 
-    dt = env.unwrapped.step_dt
+    # Export ONNX if requested
+    if args_cli.export_onnx:
+        export_policy_onnx(runner, resume_path)
 
-    # reset environment
+    # Obtain policy for inference
+    policy = runner.get_inference_policy(device=env.unwrapped.device)
+
+    # Reset environment
     obs, _ = env.get_observations()
-    timestep = 0
-    # simulate environment
+
+    # Simulate environment
     while simulation_app.is_running():
-        start_time = time.time()
-        # run everything in inference mode
+        # Run policy
         with torch.inference_mode():
-            # agent stepping
             actions = policy(obs)
-            # env stepping
-            obs, _, _, _ = env.step(actions)
-        if args_cli.video:
-            timestep += 1
-            # Exit the play loop after recording one video
-            if timestep == args_cli.video_length:
-                break
+        # Step environment
+        obs, _, _, _ = env.step(actions)
 
-        # time delay for real-time evaluation
-        sleep_time = dt - (time.time() - start_time)
-        if args_cli.real_time and sleep_time > 0:
-            time.sleep(sleep_time)
-
-    # close the simulator
+    # Close the environment
     env.close()
 
 
 if __name__ == "__main__":
-    # run the main function
+    # Run the main function
     main()
-    # close sim app
+    # Close simulation
     simulation_app.close()
