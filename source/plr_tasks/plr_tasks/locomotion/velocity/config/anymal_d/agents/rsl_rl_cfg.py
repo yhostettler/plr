@@ -22,14 +22,14 @@ class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "anymal_navigation_ppo"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
-        class_name="ActorCritic",
+        class_name="ActorCriticRecurrent",
         init_noise_std=1.0,
         actor_hidden_dims=[512, 256, 128],
         critic_hidden_dims=[512, 256, 128],
         activation="elu",
-        # rnn_hidden_size=256,
-        # rnn_type="lstm_sru",
-        # num_cameras=1,
+        rnn_hidden_size=256,
+        rnn_type="lstm_sru",
+        num_cameras=0,
         # image_input_dims=(64, 5, 8),
     )
     algorithm = RslRlPpoAlgorithmCfg(

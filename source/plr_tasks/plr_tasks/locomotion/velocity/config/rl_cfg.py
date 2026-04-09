@@ -34,27 +34,27 @@ class RslRlPpoActorCriticCfg:
     activation: str = MISSING
     """The activation function for the actor and critic networks."""
 
-    # rnn_type: str = "lstm"
-    # """The type of RNN to use."""
+    rnn_type: str = "lstm"
+    """The type of RNN to use."""
 
-    # rnn_hidden_size: int = 256
-    # """The hidden size of the RNN."""
+    rnn_hidden_size: int = 256
+    """The hidden size of the RNN."""
 
-    # rnn_num_layers: int = 1
-    # """The number of layers in the RNN."""
+    rnn_num_layers: int = 1
+    """The number of layers in the RNN."""
 
-    # dropout: float = 0.0
-    # """The dropout rate for the first layer of the actor and critic networks."""
+    dropout: float = 0.0
+    """The dropout rate for the first layer of the actor and critic networks."""
 
-    # # Visual inputs
-    # num_cameras: int = 1
-    # """Number of depth cameras encoded into the observation (1 or 2)."""
+    # Visual inputs
+    num_cameras: int = 1
+    """Number of depth cameras encoded into the observation (1 or 2)."""
     
-    # image_input_dims: tuple[int, int, int] = (64, 5, 8)
-    # """Encoded depth feature shape as (C, H, W)."""
+    image_input_dims: tuple[int, int, int] = (64, 5, 8)
+    """Encoded depth feature shape as (C, H, W)."""
     
-    # height_input_dims: tuple[int, int, int] = (64, 7, 7)
-    # """Encoded height scan feature shape as (C, H, W). Default is (64, 7, 7) for 64*7*7=3136 features."""
+    height_input_dims: tuple[int, int, int] = (64, 7, 7)
+    """Encoded height scan feature shape as (C, H, W). Default is (64, 7, 7) for 64*7*7=3136 features."""
 
 
 @configclass
