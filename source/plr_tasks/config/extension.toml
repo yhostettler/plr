@@ -1,0 +1,22 @@
+[package]
+
+# Note: Semantic Versioning is used: https://semver.org/
+version = "0.1.0"
+
+# Description
+title = "PLR Project - Human Aware Locomotion"
+description = "PLR Project - Human Aware Locomotion"
+readme = "README.md"
+repository = "https://github.com/yhostettler/plr"
+category = "robotics"
+keywords = ["robotics", "rl", "locomotion", "visual", "learning", "isaaclab"]
+
+[dependencies]
+"isaaclab" = {}
+"isaaclab_assets" = {}
+
+[core]
+reloadable = false
+
+[[python.module]]
+name = "plr_tasks"
