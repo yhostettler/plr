@@ -31,6 +31,13 @@ import plr_tasks.locomotion.velocity.mdp as mdp
 ##
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
+## Binary map configuration parameters
+from .mdp.binary_map_cfg import (
+    BinaryMapGeomCfg,
+    BinaryMapResetCfg,
+    BinaryMapIntervalCfg,
+) 
+
 
 ##
 # Scene definition
@@ -264,10 +271,34 @@ class EventCfg:
         params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
-    reset_binary_map_2x2 = EventTerm(
-        func=mdp.reset_binary_map_2x2,
+    binary_map_reset = EventTerm(
+        func=mdp.randomize_global_binary_map,
         mode="reset",
+        params={
+            "map_h": BinaryMapGeomCfg.MAP_H,
+            "map_w": BinaryMapGeomCfg.MAP_W,
+            "map_res": BinaryMapGeomCfg.MAP_RES,
+            "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
+            "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
+            "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
+            "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
+            "add_border": BinaryMapGeomCfg.ADD_BORDER,
+        },
     )
+
+    binary_map_interval_update = EventTerm(
+        func=mdp.update_dynamic_binary_patches,
+        mode="interval",
+        interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
+        params={
+            "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
+            "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
+        },
+    )
+
+
+
+
 
 
 @configclass
