@@ -103,7 +103,7 @@ class CommandsCfg:
 
     base_velocity = mdp.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(100.0, 100.0), # original (10, 10)
+        resampling_time_range=(20.0, 20.0), # original (10, 10)
         rel_standing_envs=0.02,
         rel_heading_envs=1.0,
         heading_command=True,
@@ -432,7 +432,7 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 4
-        self.episode_length_s = 20.0
+        self.episode_length_s = 40.0 # original was 20
         # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
