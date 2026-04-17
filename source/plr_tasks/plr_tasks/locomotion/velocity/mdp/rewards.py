@@ -116,3 +116,40 @@ def stand_still_joint_deviation_l1(
     return mdp.joint_deviation_l1(env, asset_cfg) * (torch.norm(command[:, :2], dim=1) < command_threshold)
 
 
+# reward for tracking of linear velocity around x,y-axis (EMA)
+def track_ema_lin_vel_xy(
+    env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Reward tracking of linear velocity commands (xy axes) using exponential kernel."""
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject = env.scene[asset_cfg.name]
+
+    # compute the error
+    lin_vel_error = torch.sum(
+        torch.square((env.command_manager.get_command(command_name)[:, :2] - asset.data.root_lin_vel_b[:, :2])),
+        dim=1,
+    )
+
+    ema_error_lin_vel_xy = env.ema_manager.compute_ema_error_lin_vel_xy(lin_vel_error)
+
+    # return torch.clamp((1-(ema_error_lin_vel_xy/env.ema_manager._epsilon)),min=0)
+    # return 1/(1+ema_error_lin_vel_xy)
+    return torch.exp(-ema_error_lin_vel_xy / std**2)
+
+    
+# reward for tracking of angular velocity around z-axis (EMA)
+def track_ema_ang_vel_z(
+    env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Reward tracking of linear velocity commands (xy axes) using exponential kernel."""
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject = env.scene[asset_cfg.name]
+
+    ang_vel_error = torch.square((env.command_manager.get_command(command_name)[:, 2] - asset.data.root_lin_vel_b[:, 2])),
+
+    ema_error_ang_vel_z = env.ema_manager.compute_ema_error_ang_vel_z(ang_vel_error[0])
+
+    # return torch.clamp((1- (ema_error_ang_vel_z/env.ema_manager._epsilon)),min=0)
+    # return 1/(1+ema_error_ang_vel_z)
+    return torch.exp(-ema_error_ang_vel_z / std**2)
+
