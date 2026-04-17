@@ -14,3 +14,4 @@ from .observations import *
 from .events import *
 from .markers import *
 from .binary_map_events import *
+from .ema_manager import *
