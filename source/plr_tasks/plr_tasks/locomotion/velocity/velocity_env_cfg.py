@@ -210,18 +210,6 @@ class EventCfg:
             "num_buckets": 64,
         },
     )
-    # added: randomize terrain friction
-    physics_material_terrain = EventTerm(
-    func=mdp.randomize_rigid_body_material,
-    mode="startup",
-    params={
-        "asset_cfg": SceneEntityCfg("terrain"),
-        "static_friction_range": (1.0, 1.5),
-        "dynamic_friction_range": (0.8, 1.2),
-        "restitution_range": (0.0, 0.0),
-        "num_buckets": 64,
-    },
-)
 
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
