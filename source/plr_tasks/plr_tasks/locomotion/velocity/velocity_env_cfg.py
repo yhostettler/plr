@@ -203,13 +203,25 @@ class EventCfg:
         func=mdp.randomize_rigid_body_material,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_FOOT"), # new only Foot instead of everything
+            "static_friction_range": (1.0, 1.5), # original was (0.8, 0.8)
+            "dynamic_friction_range": (0.8, 1.2),# oirginal was (0.8, 0.6)
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
     )
+    # added: randomize terrain friction
+    physics_material_terrain = EventTerm(
+    func=mdp.randomize_rigid_body_material,
+    mode="startup",
+    params={
+        "asset_cfg": SceneEntityCfg("terrain"),
+        "static_friction_range": (1.0, 1.5),
+        "dynamic_friction_range": (0.8, 1.2),
+        "restitution_range": (0.0, 0.0),
+        "num_buckets": 64,
+    },
+)
 
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
