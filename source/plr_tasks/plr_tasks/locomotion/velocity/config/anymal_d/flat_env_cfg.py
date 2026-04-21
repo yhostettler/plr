@@ -7,9 +7,12 @@ from isaaclab.utils import configclass
 
 from .rough_env_cfg import AnymalDRoughEnvCfg
 
+from plr_tasks.locomotion.velocity.mdp.ema_manager_cfg import EMAManagerCfg
 
 @configclass
 class AnymalDFlatEnvCfg(AnymalDRoughEnvCfg):
+    ema_cfg: EMAManagerCfg = EMAManagerCfg()
+
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
