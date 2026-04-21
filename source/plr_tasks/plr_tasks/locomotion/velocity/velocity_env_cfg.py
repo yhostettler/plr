@@ -25,20 +25,17 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 # import plr_tasks mdp
 import plr_tasks.locomotion.velocity.mdp as mdp
-from plr_tasks.locomotion.velocity.mdp.ema_manager_cfg import EMAManagerCfg
 
+from .mdp.binary_map_cfg import (
+    BinaryMapGeomCfg,
+    BinaryMapResetCfg,
+    BinaryMapIntervalCfg,
+)
 
 ##
 # Pre-defined configs
 ##
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
-
-## Binary map configuration parameters
-from .mdp.binary_map_cfg import (
-    BinaryMapGeomCfg,
-    BinaryMapResetCfg,
-    BinaryMapIntervalCfg,
-) 
 
 
 ##
@@ -103,7 +100,7 @@ class CommandsCfg:
 
     base_velocity = mdp.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(20.0, 20.0), # original (10, 10)
+        resampling_time_range=(10.0, 10.0),
         rel_standing_envs=0.02,
         rel_heading_envs=1.0,
         heading_command=True,
@@ -133,8 +130,6 @@ class ObservationsCfg:
         # observation terms (order preserved)
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
-        # get current EMA for linear and angular velocity
-        base_lin_ang_vel_err_ema = ObsTerm(func=mdp.base_lin_ang_vel_err_ema, noise=Unoise(n_min=-0.1, n_max=0.1))
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
@@ -149,11 +144,14 @@ class ObservationsCfg:
         #     noise=Unoise(n_min=-0.1, n_max=0.1),
         #     clip=(-1.0, 1.0),
         # )
-        # binary_map_2x2 = ObsTerm(func=mdp.binary_map_2x2)
+        binary_map_2x2 = ObsTerm(func=mdp.binary_map_2x2)
 
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
+
+    # observation groups
+    #policy: PolicyCfg = PolicyCfg()
 
     @configclass
     class CriticCfg(ObsGroup):
@@ -161,8 +159,6 @@ class ObservationsCfg:
 
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
-        # get current EMA for linear and angular velocity
-        base_lin_ang_vel_err_ema = ObsTerm(func=mdp.base_lin_ang_vel_err_ema, noise=Unoise(n_min=-0.1, n_max=0.1))
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
@@ -171,7 +167,7 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
         actions = ObsTerm(func=mdp.last_action)
-        # binary_map_2x2 = ObsTerm(func=mdp.binary_map_2x2)
+        binary_map_2x2 = ObsTerm(func=mdp.binary_map_2x2)
         
         def __post_init__(self):
             self.enable_corruption = True
@@ -203,9 +199,9 @@ class EventCfg:
         func=mdp.randomize_rigid_body_material,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*_FOOT"), # new only Foot instead of everything
-            "static_friction_range": (1.0, 1.5), # original was (0.8, 0.8)
-            "dynamic_friction_range": (0.8, 1.2),# oirginal was (0.8, 0.6)
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.8, 0.8),
+            "dynamic_friction_range": (0.6, 0.6),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
@@ -274,34 +270,32 @@ class EventCfg:
         params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
-    # binary_map_reset = EventTerm(
-    #     func=mdp.randomize_global_binary_map,
-    #     mode="reset",
-    #     params={
-    #         "map_h": BinaryMapGeomCfg.MAP_H,
-    #         "map_w": BinaryMapGeomCfg.MAP_W,
-    #         "map_res": BinaryMapGeomCfg.MAP_RES,
-    #         "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
-    #         "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
-    #         "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
-    #         "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
-    #         "add_border": BinaryMapGeomCfg.ADD_BORDER,
-    #     },
-    # )
+    #binary map event setup
+    binary_map_reset = EventTerm(
+        func=mdp.randomize_global_binary_map,
+        mode="reset",
+        params={
+            "map_h": BinaryMapGeomCfg.MAP_H,
+            "map_w": BinaryMapGeomCfg.MAP_W,
+            "map_res": BinaryMapGeomCfg.MAP_RES,
+            "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
+            "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
+            "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
+            "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
+            "add_border": BinaryMapGeomCfg.ADD_BORDER,
+        },
+    )
 
-    # binary_map_interval_update = EventTerm(
-    #     func=mdp.update_dynamic_binary_patches,
-    #     mode="interval",
-    #     interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
-    #     params={
-    #         "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
-    #         "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
-    #     },
-    # )
-
-
-
-
+    #binary map interval
+    binary_map_interval_update = EventTerm(
+        func=mdp.update_dynamic_binary_patches,
+        mode="interval",
+        interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
+        params={
+            "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
+            "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
+        },
+    )
 
 
 @configclass
@@ -309,34 +303,26 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # -- task
-    # old exponential task rewards
-    # track_lin_vel_xy_exp = RewTerm(
-    #     func=mdp.track_lin_vel_xy_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
-    # )
-    # track_ang_vel_z_exp = RewTerm(
-    #     func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
-    # )
-    # new EMA task rewards
-    track_ema_lin_vel_xy = RewTerm(
-        func=mdp.track_ema_lin_vel_xy, weight=1,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    track_lin_vel_xy_exp = RewTerm(
+        func=mdp.track_lin_vel_xy_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
-    track_ema_ang_vel_z = RewTerm(
-        func=mdp.track_ema_ang_vel_z, weight=0.5,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    track_ang_vel_z_exp = RewTerm(
+        func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
     # -- penalties
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
-    dof_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-2.5e-5) # original was -1.0e-5, overriden by -2.5e-5
-    dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7) 
+    dof_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-1.0e-5)
+    dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     feet_air_time = RewTerm(
         func=mdp.feet_air_time,
-        weight=1.5, # original was 0.125, overriden by 0.5
+        weight=0.125,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
             "command_name": "base_velocity",
             "threshold": 0.5,
-            "max_air_time": 0.8
+            "max_air_time": 0.8, #added because reward function required
         },
     )
     undesired_contacts = RewTerm(
@@ -345,7 +331,7 @@ class RewardsCfg:
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*THIGH"), "threshold": 1.0},
     )
     # -- optional penalties
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-2) # original 0, overridden by -5
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
 
 
@@ -366,44 +352,6 @@ class CurriculumCfg:
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
-    # total_steps=num_envs×steps_per_env_per_iteration×num_iterations
-    # n_steps seem to be approx tot_steps/num_envs
-
-    # option to disable the exp reward after a certain amount of steps
-    # disable_exp_lin = CurrTerm(
-    #     func=mdp.modify_reward_weight,
-    #     params={
-    #         "term_name": "track_lin_vel_xy_exp",
-    #         "weight": 0.0,
-    #         "num_steps": 30000,
-    #     }
-    # )
-    # disable_exp_ang = CurrTerm(
-    #     func=mdp.modify_reward_weight,
-    #     params={
-    #         "term_name": "track_ang_vel_z_exp",
-    #         "weight": 0.0,
-    #         "num_steps": 30000,
-    #     }
-    # )
-
-    # option to enable the EMA reward after a certain amount of steps
-    # enable_ema_lin = CurrTerm(
-    #     func=mdp.modify_reward_weight,
-    #     params={
-    #         "term_name": "track_ema_lin_vel_xy",
-    #         "weight": 1.0,
-    #         "num_steps": 15000,
-    #     }
-    # )
-    # enable_ema_ang = CurrTerm(
-    #     func=mdp.modify_reward_weight,
-    #     params={
-    #         "term_name": "track_ema_ang_vel_z",
-    #         "weight": 0.5,
-    #         "num_steps": 15000,
-    #     }
-    # )
 
 ##
 # Environment configuration
@@ -426,14 +374,11 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
-    # Observation delay configuration
-    ema_cfg: EMAManagerCfg = EMAManagerCfg()
-
     def __post_init__(self):
         """Post initialization."""
         # general settings
         self.decimation = 4
-        self.episode_length_s = 40.0 # original was 20
+        self.episode_length_s = 20.0
         # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation

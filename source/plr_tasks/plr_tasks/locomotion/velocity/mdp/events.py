@@ -8,8 +8,42 @@ from .binary_map_cfg import (
     BinaryMapGeomCfg,
     BinaryMapResetCfg,
     BinaryMapIntervalCfg,
+    BinaryMapTraceCfg,
 )
 
+def _update_binary_map_trace(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    event_name: str,
+) -> None:
+    """Append a small CPU trace of selected global maps."""
+    if not BinaryMapTraceCfg.ENABLED:
+        return
+
+    selected_ids = set(BinaryMapTraceCfg.ENV_IDS)
+
+    if not hasattr(env, "plr_binary_map_trace"):
+        env.plr_binary_map_trace = []
+
+    step = int(getattr(env, "common_step_counter", -1))
+
+    for env_id in env_ids.tolist():
+        if env_id not in selected_ids:
+            continue
+
+        entry = {
+            "event": event_name,
+            "step": step,
+            "env_id": int(env_id),
+            "map": env.plr_global_binary_map[env_id].detach().cpu().clone(),
+            "map_origin_xy": env.plr_map_origin_xy.detach().cpu().clone(),
+            "map_resolution": float(env.plr_map_resolution),
+        }
+        env.plr_binary_map_trace.append(entry)
+
+    # keep only the most recent entries
+    if len(env.plr_binary_map_trace) > BinaryMapTraceCfg.LIMIT:
+        env.plr_binary_map_trace = env.plr_binary_map_trace[-BinaryMapTraceCfg.LIMIT:]
 
 def _set_map_metadata(env: ManagerBasedRLEnv, map_h: int, map_w: int, map_res: float) -> None:
     env.plr_map_origin_xy = torch.tensor(
@@ -95,6 +129,8 @@ def randomize_global_binary_map(
 
     env.plr_global_binary_map = torch.minimum(env.plr_base_binary_map, env.plr_dynamic_patch_map)
 
+    _update_binary_map_trace(env, env_ids, event_name="reset")
+
 def update_dynamic_binary_patches(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor | None,
@@ -123,3 +159,4 @@ def update_dynamic_binary_patches(
 
     env.plr_global_binary_map = torch.minimum(env.plr_base_binary_map, env.plr_dynamic_patch_map)
 
+    _update_binary_map_trace(env, env_ids, event_name="interval")
