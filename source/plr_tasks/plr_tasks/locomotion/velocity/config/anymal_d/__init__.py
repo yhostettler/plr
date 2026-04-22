@@ -13,7 +13,7 @@ from .agents import rsl_rl_cfg
 
 gym.register(
     id="Isaac-PLR-Velocity-Flat-Anymal-D-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="plr_tasks.locomotion.velocity.velocity_env:LocomotionVelocityRoughEnv",
     disable_env_checker=False,
     kwargs={
         "env_cfg_entry_point": flat_env_cfg.AnymalDFlatEnvCfg,
@@ -24,7 +24,7 @@ gym.register(
 
 gym.register(
     id="Isaac-PLR-Velocity-Flat-Anymal-D-Play-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="plr_tasks.locomotion.velocity.velocity_env:LocomotionVelocityRoughEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": flat_env_cfg.AnymalDFlatEnvCfg_PLAY,

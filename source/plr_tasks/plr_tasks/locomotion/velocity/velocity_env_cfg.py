@@ -26,17 +26,16 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 # import plr_tasks mdp
 import plr_tasks.locomotion.velocity.mdp as mdp
 
-##
-# Pre-defined configs
-##
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
-
-## Binary map configuration parameters
 from .mdp.binary_map_cfg import (
     BinaryMapGeomCfg,
     BinaryMapResetCfg,
     BinaryMapIntervalCfg,
-) 
+)
+
+##
+# Pre-defined configs
+##
+from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 
 ##
@@ -152,7 +151,7 @@ class ObservationsCfg:
             self.concatenate_terms = True
 
     # observation groups
-    policy: PolicyCfg = PolicyCfg()
+    #policy: PolicyCfg = PolicyCfg()
 
     @configclass
     class CriticCfg(ObsGroup):
@@ -271,6 +270,7 @@ class EventCfg:
         params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
+    #binary map event setup
     binary_map_reset = EventTerm(
         func=mdp.randomize_global_binary_map,
         mode="reset",
@@ -286,6 +286,7 @@ class EventCfg:
         },
     )
 
+    #binary map interval
     binary_map_interval_update = EventTerm(
         func=mdp.update_dynamic_binary_patches,
         mode="interval",
@@ -295,10 +296,6 @@ class EventCfg:
             "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
         },
     )
-
-
-
-
 
 
 @configclass
@@ -325,6 +322,7 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
             "command_name": "base_velocity",
             "threshold": 0.5,
+            "max_air_time": 0.8, #added because reward function required
         },
     )
     undesired_contacts = RewTerm(

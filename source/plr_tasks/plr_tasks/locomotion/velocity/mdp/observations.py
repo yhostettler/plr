@@ -1,8 +1,10 @@
 import torch
-from isaaclab.envs import ManagerBasedRLEnv
+from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
+from isaaclab.assets import RigidObject
+from isaaclab.managers import SceneEntityCfg
 
 from .binary_map_cfg import BinaryMapGeomCfg, BinaryMapEgoCfg
-
+import plr_tasks.locomotion.velocity.mdp as mdp
 
 
 
@@ -47,9 +49,6 @@ def _ensure_bootstrap_global_binary_map(env: ManagerBasedRLEnv) -> None:
         env.plr_dynamic_patch_map = torch.ones_like(env.plr_base_binary_map)
 
     env.plr_global_binary_map = torch.minimum(env.plr_base_binary_map, env.plr_dynamic_patch_map)
-
-
-
 
 
 
@@ -122,3 +121,22 @@ def binary_map_2x2(env: ManagerBasedRLEnv) -> torch.Tensor:
 
     return out
 
+def base_lin_ang_vel_err_ema(env: ManagerBasedEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Compute ema tensor (lin_vel_x_ema, lin_vel_y_ema, ang_vel_z_ema).
+
+    Requires env.ema_manager to exist. 
+
+    Args:
+        env: The environment object (must have ema_manager attribute).
+        asset_cfg: The name of the asset.
+
+    Returns:
+        The delayed linear velocity in the asset's root frame.
+    """
+    asset: RigidObject = env.scene[asset_cfg.name]
+    lin_vel_xy = asset.data.root_lin_vel_b[:, :2]
+    ang_vel_z = asset.data.root_ang_vel_b[:, -1].unsqueeze(1)
+
+    return env.ema_manager.compute_ema_signal(torch.cat((lin_vel_xy, ang_vel_z), dim=1))

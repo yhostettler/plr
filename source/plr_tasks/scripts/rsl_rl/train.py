@@ -9,6 +9,9 @@
 
 import argparse
 import sys
+import os
+import torch
+
 
 from isaaclab.app import AppLauncher
 
@@ -201,7 +204,15 @@ def main():
 
    # run training
    runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
-   # close the simulator
+
+   # add binary map trace
+   base_env = env.unwrapped
+   if hasattr(base_env, "plr_binary_map_trace"):
+        trace_path = os.path.join(log_dir, "binary_map_trace.pt")
+        torch.save(base_env.plr_binary_map_trace, trace_path)
+        print(f"[binary map trace] saved to {trace_path}")
+  
+ # close the simulator
    env.close()
    
 if __name__ == "__main__":

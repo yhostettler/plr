@@ -1,15 +1,15 @@
 class BinaryMapGeomCfg:
-    # global map geometry (MAP_H * MAP_RES)
-    MAP_H = 20
+    # global map geometry (MAP_H * MAP_RES in meters)
+    MAP_H = 64
     MAP_W = MAP_H
-    MAP_RES = 0.5
+    MAP_RES = 0.2
     ADD_BORDER = False
 
 
 class BinaryMapResetCfg:
     # reset randomization
-    NUM_RECTANGLES_MIN = 1
-    NUM_RECTANGLES_MAX = 10
+    NUM_RECTANGLES_MIN = 25
+    NUM_RECTANGLES_MAX = 40
     MIN_RECT_SIZE = 1
     MAX_RECT_SIZE = 5
 
@@ -18,8 +18,8 @@ class BinaryMapIntervalCfg:
     # dynamic updates during the episode
     ENABLED = True
     INTERVAL_RANGE_S = (1.0, 1.0)
-    NUM_PATCHES = 2
-    PATCH_SIZE = 1
+    NUM_PATCHES = 10
+    PATCH_SIZE = 5
 
 
 class BinaryMapEgoCfg:
@@ -33,3 +33,9 @@ class BinaryMapMarkerCfg:
     FORBIDDEN_Z = 0.10
     SAMPLE_Z = 0.15
     FORBIDDEN_CUBE_SIZE = (0.18, 0.18, 0.06)    #Single source of truth for global binary map settings.
+
+class BinaryMapTraceCfg:
+    #Training Trace
+    ENABLED = False
+    ENV_IDS = [0]
+    LIMIT = 50
