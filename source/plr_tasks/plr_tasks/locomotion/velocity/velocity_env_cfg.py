@@ -144,7 +144,7 @@ class ObservationsCfg:
         #     noise=Unoise(n_min=-0.1, n_max=0.1),
         #     clip=(-1.0, 1.0),
         # )
-        binary_map_2x2 = ObsTerm(func=mdp.binary_map_2x2)
+        binary_map_local = ObsTerm(func=mdp.binary_map_local)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -167,7 +167,7 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
         actions = ObsTerm(func=mdp.last_action)
-        binary_map_2x2 = ObsTerm(func=mdp.binary_map_2x2)
+        binary_map_local = ObsTerm(func=mdp.binary_map_local)
         
         def __post_init__(self):
             self.enable_corruption = True

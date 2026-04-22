@@ -4,7 +4,7 @@ Usage:
    python scripts/play.py --task <task_name> [options]
 
 Arguments:
-   --task                   Task name (required, typically *-Play-v0 variant)
+   --task                   Task name
    --checkpoint             Path to model checkpoint (.pt file)
    --use_last_checkpoint    Use latest checkpoint from logs (default behavior)
    --num_envs               Number of parallel environments
@@ -13,12 +13,11 @@ Arguments:
    --binary_map_trace_file  Path to binary_map_trace.pt
    --binary_map_trace_index Index into trace list (default: -1 = last)
 
-Examples:
-   python scripts/play.py --task Isaac-Navigation-B2W-Play-v0
-   python scripts/play.py --task Isaac-Navigation-B2W-Play-v0 --checkpoint path/to/model.pt
-   python scripts/play.py --task Isaac-Navigation-B2W-Play-v0 --video --num_envs 16
-
-Note: Automatically finds latest checkpoint if --checkpoint not specified.
+Modes:
+   - Live mode  : no --binary_map_trace_file
+                  -> binary map comes from the live environment and updates during play
+   - Trace mode : with --binary_map_trace_file
+                  -> restore one logged binary-map snapshot and visualize it
 """
 
 from __future__ import annotations
@@ -30,6 +29,7 @@ import torch
 import gymnasium as gym
 
 from isaaclab.app import AppLauncher
+
 
 # -----------------------------------------------------------------------------
 # CLI
@@ -56,12 +56,14 @@ args_cli, hydra_args = parser.parse_known_args()
 # Always enable cameras for play/visualization
 args_cli.enable_cameras = True
 
+
 # -----------------------------------------------------------------------------
 # Launch app BEFORE importing Isaac Sim dependent modules
 # -----------------------------------------------------------------------------
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
+
 
 # -----------------------------------------------------------------------------
 # Imports that require the app
@@ -180,7 +182,7 @@ def export_policy_onnx(runner: OnPolicyRunner, checkpoint_path: str) -> None:
 # -----------------------------------------------------------------------------
 
 def main() -> None:
-    """Play navigation policy with RSL-RL and optional binary-map visualization."""
+    """Play navigation policy with RSL-RL and binary-map visualization."""
     spec = gym.spec(args_cli.task)
     env_cfg_class = spec.kwargs.get("env_cfg_entry_point")
     agent_cfg_class = spec.kwargs.get("rsl_rl_cfg_entry_point")
@@ -191,8 +193,7 @@ def main() -> None:
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
 
-    # Disable binary-map env events in play if we want to visualize a traced map.
-    # This prevents play from overwriting the restored map.
+    # In trace mode, disable binary-map events so the restored map is not overwritten.
     if args_cli.binary_map_trace_file is not None and hasattr(env_cfg, "events"):
         if hasattr(env_cfg.events, "binary_map_reset"):
             env_cfg.events.binary_map_reset = None
@@ -227,11 +228,13 @@ def main() -> None:
     policy = runner.get_inference_policy(device=env.unwrapped.device)
 
     # -------------------------------------------------------------------------
-    # Restore a traced binary map if provided
+    # Binary-map visualization setup
     # -------------------------------------------------------------------------
 
     markers = mdp_markers.create_binary_map_markers()
+    prev_global_map = None
 
+    # Trace mode: restore one saved binary map snapshot.
     if args_cli.binary_map_trace_file is not None:
         trace = torch.load(args_cli.binary_map_trace_file)
         if len(trace) == 0:
@@ -254,10 +257,6 @@ def main() -> None:
         base_env.plr_map_origin_xy = traced_origin_xy
         base_env.plr_map_resolution = traced_res
 
-        # Keep these consistent for code paths that expect them.
-        base_env.plr_base_binary_map = base_env.plr_global_binary_map.clone()
-        base_env.plr_dynamic_patch_map = torch.ones_like(base_env.plr_global_binary_map)
-
         print(
             f"[play] loaded binary map trace entry {args_cli.binary_map_trace_index} "
             f"from {args_cli.binary_map_trace_file}",
@@ -275,6 +274,19 @@ def main() -> None:
             float(base_env.plr_map_resolution),
             z=0.10,
         )
+        prev_global_map = base_env.plr_global_binary_map[0].detach().cpu().clone()
+
+    # Live mode
+    else:
+        mdp_markers.update_forbidden_markers(
+            markers,
+            base_env.plr_global_binary_map[0],
+            base_env.plr_map_origin_xy,
+            float(base_env.plr_map_resolution),
+            z=0.10,
+        )
+        prev_global_map = base_env.plr_global_binary_map[0].detach().cpu().clone()
+        print("[play] live binary-map visualization enabled", flush=True)
 
     # First observations
     obs, _ = env.get_observations()
@@ -289,24 +301,24 @@ def main() -> None:
 
         obs, _, _, _ = env.step(actions)
 
-        # Only update binary-map markers if a traced map was loaded.
-        if args_cli.binary_map_trace_file is not None:
-            _ = mdp.binary_map_2x2(base_env)[0].detach().cpu()
+        # Update robot marker every frame
+        root_pos = robot.data.root_pos_w[0:1, :3]
+        root_quat = robot.data.root_quat_w[0:1, :]
+        mdp_markers.update_robot_marker(markers, root_pos, root_quat)
 
-            root_pos = robot.data.root_pos_w[0:1, :3]
-            root_quat = robot.data.root_quat_w[0:1, :]
-            mdp_markers.update_robot_marker(markers, root_pos, root_quat)
-
-            rows = base_env.plr_last_rows[0]
-            cols = base_env.plr_last_cols[0]
-            mdp_markers.update_sample_markers(
+        # Update forbidden markers only if the global map changed
+        current_global_map = base_env.plr_global_binary_map[0].detach().cpu()
+        if prev_global_map is None or not torch.equal(current_global_map, prev_global_map):
+            mdp_markers.update_forbidden_markers(
                 markers,
-                rows,
-                cols,
+                base_env.plr_global_binary_map[0],
                 base_env.plr_map_origin_xy,
                 float(base_env.plr_map_resolution),
-                z=0.15,
+                z=0.10,
             )
+            prev_global_map = current_global_map.clone()
+            if args_cli.binary_map_trace_file is None:
+                print("[play] global binary map changed", flush=True)
 
     env.close()
 
@@ -314,4 +326,3 @@ def main() -> None:
 if __name__ == "__main__":
     main()
     simulation_app.close()
-
