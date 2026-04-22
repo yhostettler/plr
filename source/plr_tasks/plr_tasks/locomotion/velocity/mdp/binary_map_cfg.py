@@ -8,8 +8,8 @@ class BinaryMapGeomCfg:
 
 class BinaryMapResetCfg:
     # reset randomization
-    NUM_RECTANGLES_MIN = 10
-    NUM_RECTANGLES_MAX = 15
+    NUM_RECTANGLES_MIN = 25
+    NUM_RECTANGLES_MAX = 40
     MIN_RECT_SIZE = 1
     MAX_RECT_SIZE = 5
 
@@ -18,8 +18,8 @@ class BinaryMapIntervalCfg:
     # dynamic updates during the episode
     ENABLED = True
     INTERVAL_RANGE_S = (1.0, 1.0)
-    NUM_PATCHES = 5
-    PATCH_SIZE = 1
+    NUM_PATCHES = 10
+    PATCH_SIZE = 5
 
 
 class BinaryMapEgoCfg:
@@ -36,6 +36,6 @@ class BinaryMapMarkerCfg:
 
 class BinaryMapTraceCfg:
     #Training Trace
-    ENABLED = True
+    ENABLED = False
     ENV_IDS = [0]
     LIMIT = 50
