@@ -8,3 +8,4 @@ venv/
 outputs/
 logs/
 data/
+*.egg-info/
