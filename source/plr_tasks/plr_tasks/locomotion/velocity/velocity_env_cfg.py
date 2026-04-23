@@ -330,6 +330,16 @@ class RewardsCfg:
         weight=-1.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*THIGH"), "threshold": 1.0},
     )
+        # -- binary map penalty: fires when any foot contacts a forbidden map cell
+    forbidden_patch = RewTerm(
+        func=mdp.forbidden_patch_penalty,
+        weight=-0.5,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
+            "contact_threshold": 1.0,
+        },
+    )
     # -- optional penalties
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
