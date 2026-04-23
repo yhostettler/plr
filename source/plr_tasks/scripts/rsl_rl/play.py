@@ -46,6 +46,7 @@ parser.add_argument("--export_jit", action="store_true", default=False, help="Ex
 parser.add_argument("--export_onnx", action="store_true", default=False, help="Export policy as ONNX model.")
 
 # Binary-map playback
+parser.add_argument("--debug_vis", action="store_true", default=False, help="Draw binary map forbidden cells in the viewport (live map, no trace needed).")
 parser.add_argument("--binary_map_trace_file", type=str, default=None, help="Path to binary_map_trace.pt")
 parser.add_argument("--binary_map_trace_index", type=int, default=-1, help="Trace entry index (-1 = last)")
 
@@ -193,6 +194,9 @@ def main() -> None:
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
 
+    if args_cli.debug_vis:
+        env_cfg.debug_vis = True
+
     # In trace mode, disable binary-map events so the restored map is not overwritten.
     if args_cli.binary_map_trace_file is not None and hasattr(env_cfg, "events"):
         if hasattr(env_cfg.events, "binary_map_reset"):
@@ -230,11 +234,19 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # Binary-map visualization setup
     # -------------------------------------------------------------------------
+    # Two mutually exclusive modes:
+    #
+    #   --debug_vis              Live mode: env.step() owns the markers and redraws
+    #                            them automatically on each map reset. Shows the real
+    #                            random patches the policy faces during play.
+    #
+    #   --binary_map_trace_file  Trace mode: inject one logged map snapshot, freeze
+    #                            the map events, and manage markers here in the script.
+    #                            Useful for reproducing a specific training situation.
 
-    markers = mdp_markers.create_binary_map_markers()
-    prev_global_map = None
+    trace_markers = None
+    trace_prev_map = None
 
-    # Trace mode: restore one saved binary map snapshot.
     if args_cli.binary_map_trace_file is not None:
         trace = torch.load(args_cli.binary_map_trace_file)
         if len(trace) == 0:
@@ -246,6 +258,7 @@ def main() -> None:
         traced_origin_xy = entry["map_origin_xy"].to(base_env.device)
         traced_res = float(entry["map_resolution"])
 
+        # Inject the logged map into every env so observations stay consistent.
         if (
             not hasattr(base_env, "plr_global_binary_map")
             or base_env.plr_global_binary_map.shape[1:] != traced_map.shape
@@ -267,26 +280,16 @@ def main() -> None:
             flush=True,
         )
 
+        # Create and draw markers for the frozen trace map.
+        trace_markers = mdp_markers.create_binary_map_markers()
         mdp_markers.update_forbidden_markers(
-            markers,
+            trace_markers,
             base_env.plr_global_binary_map[0],
             base_env.plr_map_origin_xy,
             float(base_env.plr_map_resolution),
             z=0.10,
         )
-        prev_global_map = base_env.plr_global_binary_map[0].detach().cpu().clone()
-
-    # Live mode
-    else:
-        mdp_markers.update_forbidden_markers(
-            markers,
-            base_env.plr_global_binary_map[0],
-            base_env.plr_map_origin_xy,
-            float(base_env.plr_map_resolution),
-            z=0.10,
-        )
-        prev_global_map = base_env.plr_global_binary_map[0].detach().cpu().clone()
-        print("[play] live binary-map visualization enabled", flush=True)
+        trace_prev_map = base_env.plr_global_binary_map[0].detach().cpu().clone()
 
     # First observations
     obs, _ = env.get_observations()
@@ -301,24 +304,26 @@ def main() -> None:
 
         obs, _, _, _ = env.step(actions)
 
-        # Update robot marker every frame
-        root_pos = robot.data.root_pos_w[0:1, :3]
-        root_quat = robot.data.root_quat_w[0:1, :]
-        mdp_markers.update_robot_marker(markers, root_pos, root_quat)
+        # Trace mode: update robot marker and redraw forbidden cells if the map
+        # somehow changed (should stay frozen, but defensive check is cheap).
+        if trace_markers is not None:
+            root_pos = robot.data.root_pos_w[0:1, :3]
+            root_quat = robot.data.root_quat_w[0:1, :]
+            mdp_markers.update_robot_marker(trace_markers, root_pos, root_quat)
 
-        # Update forbidden markers only if the global map changed
-        current_global_map = base_env.plr_global_binary_map[0].detach().cpu()
-        if prev_global_map is None or not torch.equal(current_global_map, prev_global_map):
-            mdp_markers.update_forbidden_markers(
-                markers,
-                base_env.plr_global_binary_map[0],
-                base_env.plr_map_origin_xy,
-                float(base_env.plr_map_resolution),
-                z=0.10,
-            )
-            prev_global_map = current_global_map.clone()
-            if args_cli.binary_map_trace_file is None:
-                print("[play] global binary map changed", flush=True)
+            current_global_map = base_env.plr_global_binary_map[0].detach().cpu()
+            if not torch.equal(current_global_map, trace_prev_map):
+                mdp_markers.update_forbidden_markers(
+                    trace_markers,
+                    base_env.plr_global_binary_map[0],
+                    base_env.plr_map_origin_xy,
+                    float(base_env.plr_map_resolution),
+                    z=0.10,
+                )
+                trace_prev_map = current_global_map.clone()
+
+        # Live mode: env.step() handles forbidden-cell markers automatically
+        # when cfg.debug_vis=True (set via --debug_vis).
 
     env.close()
 

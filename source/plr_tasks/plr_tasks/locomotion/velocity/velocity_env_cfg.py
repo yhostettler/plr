@@ -384,6 +384,10 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
+    # Draw forbidden binary-map cells as red cubes in the Isaac Sim viewport.
+    # Set to True via --debug_vis in train.py or directly on the cfg before gym.make().
+    debug_vis: bool = False
+
     def __post_init__(self):
         """Post initialization."""
         # general settings

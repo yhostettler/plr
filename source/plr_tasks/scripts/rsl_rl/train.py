@@ -33,6 +33,7 @@ parser.add_argument("--num_envs", type=int, default=None, help="Number of parall
 parser.add_argument("--task", type=str, default=None, help="Task name.")
 parser.add_argument("--seed", type=int, default=None, help="Random seed.")
 parser.add_argument("--max_iterations", type=int, default=None, help="Maximum number of learning iterations.")
+parser.add_argument("--debug_vis", action="store_true", default=False, help="Draw binary map forbidden cells in the viewport during training.")
 
 # Isaac Lab app args
 AppLauncher.add_app_launcher_args(parser)
@@ -96,6 +97,9 @@ def main() -> None:
 
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
+
+    if args_cli.debug_vis:
+        env_cfg.debug_vis = True
 
     if args_cli.seed is not None:
         if hasattr(env_cfg, "seed"):
@@ -174,6 +178,8 @@ def main() -> None:
         trace_path = os.path.join(log_dir, "binary_map_trace.pt")
         torch.save(base_env.plr_binary_map_trace, trace_path)
         print(f"[binary map trace] saved to {trace_path}", flush=True)
+
+
 
     env.close()
 
