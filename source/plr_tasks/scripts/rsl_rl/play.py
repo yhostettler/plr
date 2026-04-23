@@ -156,13 +156,6 @@ def main() -> None:
         resume_path = find_latest_checkpoint(log_root_path, checkpoint_pattern=r"model_.*\.pt")
 
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
-    load_checkpoint_with_fallback(runner, resume_path)
-
-    if args_cli.export_jit:
-        export_policy_jit(runner, resume_path)
-
-    if args_cli.export_onnx:
-        export_policy_onnx(runner, resume_path)
 
     policy = runner.get_inference_policy(device=env.unwrapped.device)
 
