@@ -152,24 +152,19 @@ class EMAManager:
                 self._ema_signal_state.zero_()
 
 
-    def reset_ema_error(self, env_ids: torch.Tensor | None = None, data: torch.Tensor | None = None):
-        """Reset the EMA error state.
+    def reset_ema_error(self, env_ids: torch.Tensor | None = None):
+        """Reset both EMA error states to zero.
 
         Args:
             env_ids: Environment indices to reset. If None, all environments are reset.
-            data: If provided, the EMA error will be reset to this data for the specified env_ids.
         """
-        if self._ema_error_state is None:
-            return
-
         if env_ids is not None:
-            if data is not None:
-                # Ensure data is sliced correctly for env_ids
-                self._ema_error_state[env_ids] = data[env_ids]
-            else:
-                self._ema_error_state[env_ids] = 0.0
+            if self._ema_error_state_lin_vel_xy is not None:
+                self._ema_error_state_lin_vel_xy[env_ids] = 0.0
+            if self._ema_error_state_ang_vel_z is not None:
+                self._ema_error_state_ang_vel_z[env_ids] = 0.0
         else:
-            if data is not None:
-                self._ema_error_state.copy_(data)
-            else:
-                self._ema_error_state.zero_()
+            if self._ema_error_state_lin_vel_xy is not None:
+                self._ema_error_state_lin_vel_xy.zero_()
+            if self._ema_error_state_ang_vel_z is not None:
+                self._ema_error_state_ang_vel_z.zero_()

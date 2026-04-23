@@ -298,9 +298,9 @@ def track_ema_ang_vel_z(
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
 
-    ang_vel_error = torch.square((env.command_manager.get_command(command_name)[:, 2] - asset.data.root_lin_vel_b[:, 2])),
+    ang_vel_error = torch.square(env.command_manager.get_command(command_name)[:, 2] - asset.data.root_ang_vel_b[:, 2])
 
-    ema_error_ang_vel_z = env.ema_manager.compute_ema_error_ang_vel_z(ang_vel_error[0])
+    ema_error_ang_vel_z = env.ema_manager.compute_ema_error_ang_vel_z(ang_vel_error)
 
     # return torch.clamp((1- (ema_error_ang_vel_z/env.ema_manager._epsilon)),min=0)
     # return 1/(1+ema_error_ang_vel_z)
