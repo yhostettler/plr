@@ -1,4 +1,4 @@
-# Close-Proximity Human-Aware Locomotion — `plr_loc_task`
+# Close-Proximity Human-Aware Locomotion — `plr_tasks`
 
 Isaac Lab 2.1.1 extension that trains an **ANYmal-D** quadruped to navigate
 while avoiding foothold placement on (simulated) humans, using a 2D binary
@@ -11,7 +11,7 @@ the ETH Legged Robotics **SRU-enhanced rsl_rl fork**
 ## Quick start
 training the current main task (headless):
 
-./isaaclab.sh -p source/plr/source/plr_tasks/scripts/rsl_rl/train.py --num_envs 2024 --task Isaac-PLR-Velocity-Flat-Anymal-D-v0 --headless
+./isaaclab.sh -p source/plr/source/plr_tasks/scripts/rsl_rl/train.py --num_envs 2048 --task Isaac-PLR-Velocity-Flat-Anymal-D-v0 --headless
 
 to play a model:
 
@@ -23,7 +23,7 @@ add --video to record a video
 
 | Gym ID | Purpose |
 |---|---|
-| `Isaac-PLR-Velocity-Flat-Anymal-D-v0` | Static random-patch map |
+| `Isaac-PLR-Velocity-Flat-Anymal-D-v0` | Current Latest Policy |
 
 ## Docs
 
