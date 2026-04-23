@@ -50,6 +50,36 @@ class BinaryMapLocalCfg:
     assert LOCAL_W == 64
 
 
+class BinaryMapHumanCfg:
+    ENABLED = True
+
+    # number of walking humans per env
+    NUM_HUMANS = 3
+
+    # fixed default motion for first version
+    DEFAULT_SPEED_MPS = 1.2
+    DEFAULT_YAW_RANGE = (-3.14159, 3.14159)
+
+    # gait / footprint timing
+    STEP_PERIOD_S = 0.5
+    STRIDE_LENGTH_M = 0.6
+    STEP_WIDTH_M = 0.18
+
+    # footprint size
+    FOOT_LENGTH_M = 0.26
+    FOOT_WIDTH_M = 0.10
+
+    # where walkers spawn
+    SPAWN_MARGIN_M = 1.0
+
+    # how many recent steps stay visible
+    MAX_FOOTPRINT_AGE = 20
+
+    # if 1 = allowed patch
+    # if 0 = forbidden patch
+    FOOTPRINT_VALUE = 0.0
+    BACKGROUND_VALUE = 1.0
+
 class BinaryMapMarkerCfg:
     """Visualization."""
     FORBIDDEN_Z = 0.10
