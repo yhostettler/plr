@@ -5,7 +5,7 @@
 
 from isaaclab.utils import configclass
 
-from plr_tasks.locomotion.velocity.config.rl_cfg import (
+from plr_tasks.config.rl_cfg import (
     RslRlOnPolicyRunnerCfg,
     RslRlPpoActorCriticCfg,
     RslRlPpoAlgorithmCfg,
@@ -47,15 +47,3 @@ class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
-
-# @configclass
-# class AnymalDFlatPPORunnerCfg(AnymalDRoughPPORunnerCfg):
-#     def __post_init__(self):
-#         super().__post_init__()
-
-#         self.max_iterations = 300
-#         self.experiment_name = "anymal_d_flat"
-#         self.logger = "tensorboard"
-
-
-

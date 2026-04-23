@@ -12,14 +12,14 @@ import torch
 
 from isaaclab.envs import ManagerBasedRLEnv
 
-from plr_tasks.locomotion.velocity.mdp.ema_manager import EMAManager
-import plr_tasks.locomotion.velocity.mdp.markers as mdp_markers
+from plr_tasks.managers.ema_manager import EMAManager
+import plr_tasks.mdp.markers as mdp_markers
 
 if TYPE_CHECKING:
-    from plr_tasks.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
+    from plr_tasks.env_cfg import PLRLocomotionEnvCfg
 
 
-class LocomotionVelocityRoughEnv(ManagerBasedRLEnv):
+class PLRLocomotionEnv(ManagerBasedRLEnv):
     """Navigation environment with EMA manager and optional binary map visualization.
 
     Extends ManagerBasedRLEnv with:
@@ -33,7 +33,7 @@ class LocomotionVelocityRoughEnv(ManagerBasedRLEnv):
     on every training step — that is the only injection point available.
     """
 
-    cfg: LocomotionVelocityRoughEnvCfg
+    cfg: PLRLocomotionEnvCfg
 
     def load_managers(self):
         # Create the EMA manager before other managers so observation terms

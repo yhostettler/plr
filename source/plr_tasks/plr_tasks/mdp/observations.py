@@ -10,8 +10,6 @@ from .binary_map_cfg import (
     BinaryMapLocalCfg,
 )
 
-import plr_tasks.locomotion.velocity.mdp as mdp
-
 
 def _yaw_from_quat_wxyz(quat_wxyz: torch.Tensor) -> torch.Tensor:
     """Extract yaw from quaternion in (w, x, y, z) format."""

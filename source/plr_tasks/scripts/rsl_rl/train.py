@@ -33,6 +33,7 @@ parser.add_argument("--num_envs", type=int, default=None, help="Number of parall
 parser.add_argument("--task", type=str, default=None, help="Task name.")
 parser.add_argument("--seed", type=int, default=None, help="Random seed.")
 parser.add_argument("--max_iterations", type=int, default=None, help="Maximum number of learning iterations.")
+parser.add_argument("--run_name", type=str, default=None, help="Name of the wandb run (appended to log directory).")
 parser.add_argument("--debug_vis", action="store_true", default=False, help="Draw binary map forbidden cells in the viewport during training.")
 
 # Isaac Lab app args
@@ -109,6 +110,9 @@ def main() -> None:
 
     if args_cli.max_iterations is not None:
         agent_cfg.max_iterations = args_cli.max_iterations
+        
+    if args_cli.run_name is not None:
+        agent_cfg.run_name = args_cli.run_name
 
     # -------------------------------------------------------------------------
     # Logging
