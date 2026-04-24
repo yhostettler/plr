@@ -29,7 +29,7 @@ class BinaryMapLocalCfg:
     LOCAL_SIZE_M / LOCAL_RES = 64, so this gives a 64x64 map
     over a 6.4m x 6.4m local window.
     """
-    LOCAL_SIZE_M = 6.4
+    LOCAL_SIZE_M = 1.6
     LOCAL_RES = 0.1
 
     LOCAL_H = int(round(LOCAL_SIZE_M / LOCAL_RES))
@@ -46,8 +46,8 @@ class BinaryMapLocalCfg:
     SAMPLE_MODE = "nearest"
 
     # Helpful safety checks
-    assert LOCAL_H == 64
-    assert LOCAL_W == 64
+    assert LOCAL_H == 16
+    assert LOCAL_W == 16
 
 
 class BinaryMapHumanCfg:
