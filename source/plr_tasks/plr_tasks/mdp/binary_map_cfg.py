@@ -17,7 +17,7 @@ class BinaryMapResetCfg:
 class BinaryMapIntervalCfg:
     """Dynamic updates during the episode."""
     ENABLED = True
-    INTERVAL_RANGE_S = (1.0, 1.0)
+    INTERVAL_RANGE_S = (1, 1)
     NUM_PATCHES = 10
     PATCH_SIZE = 5
 

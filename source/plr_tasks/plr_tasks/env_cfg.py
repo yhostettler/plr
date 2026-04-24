@@ -233,17 +233,42 @@ class EventCfg:
     )
 
     # interval
-    push_robot = EventTerm(
-        func=mdp.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(10.0, 15.0),
-        params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
-    )
+    # push_robot = EventTerm(
+    #     func=mdp.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(10.0, 15.0),
+    #     params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+    # )
 
     #binary map event setup
-    binary_map_reset = EventTerm(
+    # binary_map_reset = EventTerm(
+    #     func=mdp.randomize_global_binary_map,
+    #     mode="reset",
+    #     params={
+    #         "map_h": BinaryMapGeomCfg.MAP_H,
+    #         "map_w": BinaryMapGeomCfg.MAP_W,
+    #         "map_res": BinaryMapGeomCfg.MAP_RES,
+    #         "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
+    #         "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
+    #         "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
+    #         "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
+    #         "add_border": BinaryMapGeomCfg.ADD_BORDER,
+    #     },
+    # )
+
+
+    # binary_map_interval_update = EventTerm(
+    #     func=mdp.update_dynamic_binary_patches,
+    #     mode="interval",
+    #     interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
+    #     params={
+    #         "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
+    #         "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
+    #     },
+    # )
+    binary_map_startup = EventTerm(
         func=mdp.randomize_global_binary_map,
-        mode="reset",
+        mode="startup",
         params={
             "map_h": BinaryMapGeomCfg.MAP_H,
             "map_w": BinaryMapGeomCfg.MAP_W,
@@ -255,15 +280,19 @@ class EventCfg:
             "add_border": BinaryMapGeomCfg.ADD_BORDER,
         },
     )
-
-    #binary map interval
-    binary_map_interval_update = EventTerm(
-        func=mdp.update_dynamic_binary_patches,
+    binary_map_reset = EventTerm(
+        func=mdp.randomize_global_binary_map,
         mode="interval",
-        interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
+        interval_range_s=(10.0,20.0),
         params={
-            "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
-            "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
+            "map_h": BinaryMapGeomCfg.MAP_H,
+            "map_w": BinaryMapGeomCfg.MAP_W,
+            "map_res": BinaryMapGeomCfg.MAP_RES,
+            "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
+            "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
+            "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
+            "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
+            "add_border": BinaryMapGeomCfg.ADD_BORDER,
         },
     )
 
@@ -302,7 +331,7 @@ class RewardsCfg:
         # -- binary map penalty: starts at 0.0, activated by CurriculumCfg.forbidden_patch_activation
     forbidden_patch = RewTerm(
         func=mdp.forbidden_patch_penalty,
-        weight=0.0,
+        weight=-5,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
@@ -330,15 +359,15 @@ class TerminationsCfg:
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
-    forbidden_patch_activation = CurrTerm(
-        func=mdp.forbidden_patch_activation,
-        params={
-            "reward_term_name": "forbidden_patch",
-            "target_weight": -0.5,
-            "start_step": 24_000,   # ~iteration 1 000 with 24 steps/iter (RSL-RL default)
-            "ramp_steps": 48_000,   # ramp finishes ~iteration 3 000
-        },
-    )
+    # forbidden_patch_activation = CurrTerm(
+    #     func=mdp.forbidden_patch_activation,
+    #     params={
+    #         "reward_term_name": "forbidden_patch",
+    #         "target_weight": -0.5,
+    #         "start_step": 24_000,   # ~iteration 1 000 with 24 steps/iter (RSL-RL default)
+    #         "ramp_steps": 48_000,   # ramp finishes ~iteration 3 000
+    #     },
+    # )
 
 
 ##
