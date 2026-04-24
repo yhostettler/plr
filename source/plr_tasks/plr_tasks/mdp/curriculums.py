@@ -23,6 +23,54 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def forbidden_patch_activation(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    reward_term_name: str = "forbidden_patch",
+    target_weight: float = -5,
+    start_step: int = 24_000,
+    ramp_steps: int = 48_000,
+) -> torch.Tensor:
+    """Linearly ramp the forbidden-patch penalty from 0 to its full weight.
+
+    The robot is first allowed to learn a stable gait without any forbidden-zone
+    penalty.  After ``start_step`` environment steps the weight is linearly
+    interpolated from 0.0 to ``target_weight`` over the next ``ramp_steps``
+    steps.
+
+    Default timing (RSL-RL, 24 steps/iter):
+      - ramp begins  at iteration ~1 000  (step 24 000)
+      - ramp ends    at iteration ~3 000  (step 72 000)
+
+    Args:
+        env: The RL environment.
+        env_ids: Environments being reset — unused; the weight change is global.
+        reward_term_name: Name of the reward term whose weight is scaled.
+        target_weight: Final (fully active) weight, e.g. -0.5.
+        start_step: Step at which the ramp begins (``env.common_step_counter``).
+        ramp_steps: Duration of the ramp in environment steps.
+
+    Returns:
+        Scalar tensor with the current activation scale in [0, 1].
+    """
+    step = env.common_step_counter
+
+    if step <= start_step:
+        scale = 0.0
+    elif step >= start_step + ramp_steps:
+        scale = 1.0
+    else:
+        scale = float(step - start_step) / float(ramp_steps)
+
+    # Patch the live weight in the reward manager so the change takes effect
+    # immediately without requiring a restart.
+    if reward_term_name in env.reward_manager._term_names:
+        idx = env.reward_manager._term_names.index(reward_term_name)
+        env.reward_manager._term_cfgs[idx].weight = scale * target_weight
+
+    return torch.tensor(scale, device=env.device)
+
+
 def terrain_levels_vel(
     env: ManagerBasedRLEnv, env_ids: Sequence[int], asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:

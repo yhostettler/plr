@@ -299,10 +299,10 @@ class RewardsCfg:
         weight=-1.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*THIGH"), "threshold": 1.0},
     )
-        # -- binary map penalty: fires when any foot contacts a forbidden map cell
+        # -- binary map penalty: starts at 0.0, activated by CurriculumCfg.forbidden_patch_activation
     forbidden_patch = RewTerm(
         func=mdp.forbidden_patch_penalty,
-        weight=-0.5,
+        weight=0.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
@@ -329,6 +329,16 @@ class TerminationsCfg:
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
+
+    forbidden_patch_activation = CurrTerm(
+        func=mdp.forbidden_patch_activation,
+        params={
+            "reward_term_name": "forbidden_patch",
+            "target_weight": -0.5,
+            "start_step": 24_000,   # ~iteration 1 000 with 24 steps/iter (RSL-RL default)
+            "ramp_steps": 48_000,   # ramp finishes ~iteration 3 000
+        },
+    )
 
 
 ##
