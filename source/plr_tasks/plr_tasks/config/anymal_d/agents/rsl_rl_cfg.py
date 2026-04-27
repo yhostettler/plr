@@ -10,10 +10,12 @@ from plr_tasks.config.rl_cfg import (
     RslRlPpoActorCriticCfg,
     RslRlPpoAlgorithmCfg,
 )
+from plr_tasks.mdp.binary_map_cfg import BinaryMapLocalCfg
+
 
 @configclass
 class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-   
+
     num_steps_per_env = 24
     max_iterations = 15000
     save_interval = 500
@@ -22,7 +24,7 @@ class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "anymal_navigation_ppo"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
-        class_name="ActorCriticRecurrent",
+        class_name="ActorCriticRecurrentWithMapEncoder",
         init_noise_std=1.0,
         actor_hidden_dims=[512, 256, 128],
         critic_hidden_dims=[512, 256, 128],
@@ -30,7 +32,12 @@ class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         rnn_hidden_size=256,
         rnn_type="lstm_sru",
         num_cameras=0,
-        # image_input_dims=(64, 5, 8),
+        # Map CNN encoder — derived from BinaryMapLocalCfg so changing LOCAL_SIZE_M
+        # or LOCAL_RES there automatically flows through here.
+        map_obs_dim=BinaryMapLocalCfg.LOCAL_H * BinaryMapLocalCfg.LOCAL_W,
+        map_height=BinaryMapLocalCfg.LOCAL_H,
+        map_width=BinaryMapLocalCfg.LOCAL_W,
+        map_enc_dim=BinaryMapLocalCfg.ENC_DIM,
     )
     algorithm = RslRlPpoAlgorithmCfg(
         class_name="PPO",

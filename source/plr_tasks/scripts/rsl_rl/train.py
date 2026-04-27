@@ -66,6 +66,14 @@ from rsl_rl.runners import OnPolicyRunner
 import isaaclab_tasks  # noqa: F401
 import plr_tasks  # noqa: F401
 
+# Register PLR-specific network architectures so that OnPolicyRunner's eval()
+# can resolve them by name. eval() runs in on_policy_runner's global namespace,
+# so we inject directly into that module's __dict__.
+import rsl_rl.runners.on_policy_runner as _runner_module
+from plr_tasks.modules import ActorCriticRecurrentWithMapEncoder  # noqa: F401
+
+_runner_module.ActorCriticRecurrentWithMapEncoder = ActorCriticRecurrentWithMapEncoder
+
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
 
