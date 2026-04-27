@@ -29,7 +29,7 @@ class BinaryMapLocalCfg:
     LOCAL_SIZE_M / LOCAL_RES = 64, so this gives a 64x64 map
     over a 6.4m x 6.4m local window.
     """
-    LOCAL_SIZE_M = 1.6
+    LOCAL_SIZE_M = 3.2
     LOCAL_RES = 0.1
 
     LOCAL_H = int(round(LOCAL_SIZE_M / LOCAL_RES))
@@ -39,6 +39,9 @@ class BinaryMapLocalCfg:
     # If later you build a CNN teacher path, set this to False.
     FLATTEN_OUTPUT = True
 
+    # CNN output dimension
+    ENC_DIM = 64
+
     # Outside the global map should be forbidden.
     OUT_OF_BOUNDS_VALUE = 0.0
 
@@ -46,8 +49,8 @@ class BinaryMapLocalCfg:
     SAMPLE_MODE = "nearest"
 
     # Helpful safety checks
-    assert LOCAL_H == 16
-    assert LOCAL_W == 16
+    assert LOCAL_H == 32
+    assert LOCAL_W == 32
 
 
 class BinaryMapHumanCfg:
