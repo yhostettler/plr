@@ -49,7 +49,7 @@ class PLRLocomotionEnv(ManagerBasedRLEnv):
         # VisualizationMarkers can be safely constructed.
         # ManagerBasedRLEnv has no set_debug_vis hook, so this is the earliest
         # reliable place to create markers.
-        if self.cfg.debug_vis and self.sim.has_gui():
+        if self.cfg.debug_vis:
             self._map_vis_markers = mdp_markers.create_binary_map_markers()
             self._map_vis_last_map: torch.Tensor | None = None
         else:
