@@ -10,8 +10,8 @@ class BinaryMapResetCfg:
     """Reset-time randomization of the global map."""
     NUM_RECTANGLES_MIN = 25
     NUM_RECTANGLES_MAX = 40
-    MIN_RECT_SIZE = 1
-    MAX_RECT_SIZE = 5
+    MIN_RECT_SIZE = 6
+    MAX_RECT_SIZE = 6
 
 
 class BinaryMapIntervalCfg:
