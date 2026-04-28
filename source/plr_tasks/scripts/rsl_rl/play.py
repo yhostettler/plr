@@ -37,7 +37,7 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Play a trained navigation policy with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during play.")
-parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_length", type=int, default=1000, help="Length of the recorded video (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")

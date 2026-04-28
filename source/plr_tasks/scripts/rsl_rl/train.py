@@ -22,11 +22,11 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Train a policy with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
-parser.add_argument("--video_length", type=int, default=200, help="Length of each recorded video in steps.")
+parser.add_argument("--video_length", type=int, default=1000, help="Length of each recorded video in steps.")
 parser.add_argument(
     "--video_interval",
     type=int,
-    default=2000,
+    default=20000,
     help="Record a video every N environment steps.",
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of parallel environments.")
