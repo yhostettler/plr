@@ -25,6 +25,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 # import plr_tasks mdp
 import plr_tasks.mdp as mdp
+from plr_tasks.managers.ema_manager_cfg import EMAManagerCfg
 
 from .mdp.binary_map_cfg import (
     BinaryMapGeomCfg,
@@ -120,6 +121,8 @@ class ObservationsCfg:
         # observation terms (order preserved)
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
+        # get current EMA for linear and angular velocity
+        base_lin_ang_vel_err_ema = ObsTerm(func=mdp.base_lin_ang_vel_err_ema, noise=Unoise(n_min=-0.1, n_max=0.1))
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
@@ -141,6 +144,8 @@ class ObservationsCfg:
 
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
+         # get current EMA for linear and angular velocity
+        base_lin_ang_vel_err_ema = ObsTerm(func=mdp.base_lin_ang_vel_err_ema, noise=Unoise(n_min=-0.1, n_max=0.1))
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
@@ -308,6 +313,12 @@ class RewardsCfg:
     track_ang_vel_z_exp = RewTerm(
         func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
+    track_ema_lin_vel_xy = RewTerm(
+        func=mdp.track_ema_lin_vel_xy, weight=0,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    )
+    track_ema_ang_vel_z = RewTerm(
+        func=mdp.track_ema_ang_vel_z, weight=0,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    )
     # -- penalties
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
@@ -331,7 +342,7 @@ class RewardsCfg:
         # -- binary map penalty: starts at 0.0, activated by CurriculumCfg.forbidden_patch_activation
     forbidden_patch = RewTerm(
         func=mdp.forbidden_patch_penalty,
-        weight=0,
+        weight=-10.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
@@ -359,15 +370,57 @@ class TerminationsCfg:
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
-    forbidden_patch_activation = CurrTerm(
-        func=mdp.forbidden_patch_activation,
+    # forbidden_patch_activation = CurrTerm(
+    #     func=mdp.forbidden_patch_activation,
+    #     params={
+    #         "reward_term_name": "forbidden_patch",
+    #         "target_weight": -10,
+    #         "start_step": 24_000,   # ~iteration 1 000 with 24 steps/iter (RSL-RL default)
+    #         "ramp_steps": 48_000,   # ramp finishes ~iteration 3 000
+    #     },
+    # )
+
+
+
+    # total_steps=num_envs×steps_per_env_per_iteration×num_iterations
+    # n_steps seem to be approx tot_steps/num_envs
+
+    # option to disable the exp reward after a certain amount of steps
+    disable_exp_lin = CurrTerm(
+        func=mdp.modify_reward_weight,
         params={
-            "reward_term_name": "forbidden_patch",
-            "target_weight": -5,
-            "start_step": 24_000,   # ~iteration 1 000 with 24 steps/iter (RSL-RL default)
-            "ramp_steps": 48_000,   # ramp finishes ~iteration 3 000
-        },
+            "term_name": "track_lin_vel_xy_exp",
+            "weight": 0.0,
+            "num_steps": 15000,
+        }
     )
+    disable_exp_ang = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params={
+            "term_name": "track_ang_vel_z_exp",
+            "weight": 0.0,
+            "num_steps": 15000,
+        }
+    )
+
+    #option to enable the EMA reward after a certain amount of steps
+    enable_ema_lin = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params={
+            "term_name": "track_ema_lin_vel_xy",
+            "weight": 1.0,
+            "num_steps": 15000,
+        }
+    )
+    enable_ema_ang = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params={
+            "term_name": "track_ema_ang_vel_z",
+            "weight": 0.5,
+            "num_steps": 15000,
+        }
+    )
+
 
 
 ##
