@@ -14,60 +14,36 @@ from rsl_rl.modules.actor_critic_recurrent import ActorCriticRecurrent
 
 
 class BinaryMapCNN(nn.Module):
-    """Encodes a flat binary occupancy map into a compact feature vector.
+    """Encodes a binary occupancy map (32×32) into a compact feature vector.
 
-    The flat map of ``map_h * map_w`` values is reshaped to ``(B, 1, map_h, map_w)``
-    and passed through an adaptive convolutional stack: one stride-1 entry conv
-    followed by stride-2 convs that halve spatial dims until reaching ≤ 2×2.
-    The result is then projected to ``enc_dim`` by a linear layer.
+    Expects input shape ``(B, 1, 32, 32)``. One stride-1 entry conv followed by
+    three stride-2 convs reduce spatial dims to 4×4 (1024 flat), then a linear
+    head projects to ``enc_dim``:
 
-    Channels are doubled at each stride-2 step and capped at 64:
-
-    - 16×16:  1→8 (s1) → 8→16 (s2) → 16→32 (s2) → 32→64 (s2) → 2×2 → flat 256 → enc_dim
-    - 32×32:  1→8 (s1) → 8→16 (s2) → 16→32 (s2) → 32→64 (s2) → 64→64 (s2) → 2×2 → flat 256 → enc_dim
-    - 64×64:  1→8 (s1) → 8→16 (s2) → 16→32 (s2) → 32→64 (s2) → 64→64 (s2) → 64→64 (s2) → 64→64 (s2) → 2×2 → flat 256 → enc_dim
-
-    The linear head is always 256 → ``enc_dim`` regardless of map size.
+    1→16 (s1) → 16→32 (s2) → 32→64 (s2) → 64→64 (s2) → flat 1024 → enc_dim
 
     Args:
-        map_h: Height of the 2-D binary map.
-        map_w: Width of the 2-D binary map.
         enc_dim: Dimension of the output feature vector.
         activation: Activation function name (forwarded to ``get_activation``).
     """
 
-    def __init__(self, map_h: int, map_w: int, enc_dim: int, activation: str = "elu"):
+    def __init__(self, enc_dim: int, activation: str = "elu"):
         super().__init__()
-        self.map_h = map_h
-        self.map_w = map_w
-
-        layers: list[nn.Module] = []
-        in_ch, out_ch = 1, 8
-        h, w = map_h, map_w
-
-        # Stride-1 entry conv
-        layers += [nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1), get_activation(activation)]
-        in_ch = out_ch
-
-        # Stride-2 convs until spatial size reaches ≤ 2×2
-        while h > 2 or w > 2:
-            out_ch = min(in_ch * 2, 64)
-            layers += [nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1), get_activation(activation)]
-            h = (h + 1) // 2
-            w = (w + 1) // 2
-            in_ch = out_ch
-
-        self.conv = nn.Sequential(*layers)
-        self.fc = nn.Linear(in_ch * h * w, enc_dim)
+        act = get_activation(activation)
+        self.conv = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1), act,   # 32→32  entry conv
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1), act,  # 32→16
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1), act,  # 16→8
+            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1), act,  #  8→4
+        )
+        # 64 channels * 4x4 spatial = 1024 flat
+        self.fc = nn.Linear(64 * 4 * 4, enc_dim)
         self.fc_act = get_activation(activation)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Map flat tensor ``(B, map_h * map_w)`` → feature vector ``(B, enc_dim)``."""
-        B = x.shape[0]
-        x = x.view(B, 1, self.map_h, self.map_w)
-        x = self.conv(x)
-        x = x.flatten(1)
-        return self.fc_act(self.fc(x))
+        """Map tensor ``(B, 1, 32, 32)`` → feature vector ``(B, enc_dim)``."""
+        # conv → flatten → project to enc_dim
+        return self.fc_act(self.fc(self.conv(x).flatten(1)))
 
 
 class ActorCriticRecurrentWithMapEncoder(ActorCriticRecurrent):
@@ -105,9 +81,9 @@ class ActorCriticRecurrentWithMapEncoder(ActorCriticRecurrent):
         num_actor_obs: int,
         num_critic_obs: int,
         num_actions: int,
-        map_obs_dim: int = 4096,
-        map_height: int = 64,
-        map_width: int = 64,
+        map_obs_dim: int = 1024,
+        map_height: int = 32,
+        map_width: int = 32,
         map_enc_dim: int = 64,
         actor_hidden_dims: list[int] = [512, 256, 128],
         critic_hidden_dims: list[int] = [512, 256, 128],
@@ -150,9 +126,11 @@ class ActorCriticRecurrentWithMapEncoder(ActorCriticRecurrent):
 
         self.map_obs_dim = map_obs_dim
         self.map_enc_dim = map_enc_dim
+        self.map_height = map_height
+        self.map_width = map_width
 
-        self.map_encoder_actor = BinaryMapCNN(map_height, map_width, map_enc_dim, activation)
-        self.map_encoder_critic = BinaryMapCNN(map_height, map_width, map_enc_dim, activation)
+        self.map_encoder_actor = BinaryMapCNN(map_enc_dim, activation)
+        self.map_encoder_critic = BinaryMapCNN(map_enc_dim, activation)
 
         print(
             f"[ActorCriticRecurrentWithMapEncoder] "
@@ -185,8 +163,8 @@ class ActorCriticRecurrentWithMapEncoder(ActorCriticRecurrent):
             obs_2d = observations
 
         proprio = obs_2d[..., : -self.map_obs_dim]
-        map_flat = obs_2d[..., -self.map_obs_dim :]
-        encoded = torch.cat([proprio, map_encoder(map_flat)], dim=-1)
+        map_2d = obs_2d[..., -self.map_obs_dim :].view(-1, 1, self.map_height, self.map_width)
+        encoded = torch.cat([proprio, map_encoder(map_2d)], dim=-1)
 
         if is_seq:
             encoded = encoded.reshape(L, B, -1)
