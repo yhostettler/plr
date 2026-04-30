@@ -288,7 +288,7 @@ class EventCfg:
     binary_map_reset = EventTerm(
         func=mdp.randomize_global_binary_map,
         mode="interval",
-        interval_range_s=(10.0,20.0),
+        interval_range_s=(20.0,20.0),
         params={
             "map_h": BinaryMapGeomCfg.MAP_H,
             "map_w": BinaryMapGeomCfg.MAP_W,
