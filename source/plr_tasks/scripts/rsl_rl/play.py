@@ -75,8 +75,8 @@ import plr_tasks  # noqa: F401
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
 
-import plr_tasks.mdp as mdp
-import plr_tasks.mdp.markers as mdp_markers
+import plr_tasks.terrain_locomotion.mdp as mdp
+import plr_tasks.terrain_locomotion.mdp.markers as mdp_markers
 
 
 # -----------------------------------------------------------------------------

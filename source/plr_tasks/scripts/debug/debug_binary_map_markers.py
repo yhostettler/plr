@@ -37,9 +37,9 @@ import plr_tasks  # noqa: F401
 
 from isaaclab_tasks.utils import parse_env_cfg
 
-import plr_tasks.mdp as mdp
-import plr_tasks.mdp.markers as mdp_markers
-from plr_tasks.mdp.binary_map_cfg import BinaryMapLocalCfg
+import plr_tasks.terrain_locomotion.mdp as mdp
+import plr_tasks.terrain_locomotion.mdp.markers as mdp_markers
+from plr_tasks.terrain_locomotion.mdp.binary_map_cfg import BinaryMapLocalCfg
 
 
 # -----------------------------------------------------------------------------

@@ -3,4 +3,4 @@
 #
 # SPDX-License-Identifier: MIT
 
-from . import terrain_locomotion  # noqa: F401 — triggers gym.register() calls
+from .config.anymal_d import __init__ as _register  # noqa: F401

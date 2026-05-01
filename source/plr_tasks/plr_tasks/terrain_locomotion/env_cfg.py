@@ -18,13 +18,14 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
-from isaaclab.terrains import TerrainImporterCfg
+import isaaclab.terrains as terrain_gen
+from isaaclab.terrains import TerrainGeneratorCfg, TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 # import plr_tasks mdp
-import plr_tasks.mdp as mdp
+import plr_tasks.terrain_locomotion.mdp as mdp
 
 from .mdp.binary_map_cfg import (
     BinaryMapGeomCfg,
@@ -37,6 +38,33 @@ from .managers.ema_manager_cfg import EMAManagerCfg
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.anymal import ANYMAL_D_CFG
+from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
+
+EASY_TERRAINS_CFG = TerrainGeneratorCfg(
+    size=(8.0, 8.0),
+    border_width=10.0,
+    num_rows=6,
+    num_cols=12,
+    horizontal_scale=0.1,
+    vertical_scale=0.005,
+    slope_threshold=0.75,
+    difficulty_range=(0.0, 0.4),
+    use_cache=False,
+    sub_terrains={
+        # 50% height field where each point is sampled independently from a uniform random distribution
+        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
+            proportion=0.5, noise_range=(0.01, 0.04), noise_step=0.01, border_width=0.25
+        ),
+        # 0.25% smooth sinusoidal height field — think gentle rolling hills or a warehouse floor with slight bowing
+        "wave": terrain_gen.HfWaveTerrainCfg(
+            proportion=0.25, amplitude_range=(0.02, 0.06), num_waves=3
+        ),
+        # 0.25% flat central platform surrounded by four triangular ramps leading down (or up) to the border — like a low pyramid
+        "slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+            proportion=0.25, slope_range=(0.0, 0.15), platform_width=2.0, border_width=0.25
+        ),
+    },
+)
 
 ##
 # Scene definition
@@ -50,7 +78,9 @@ class MySceneCfg(InteractiveSceneCfg):
     # ground terrain
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="plane",
+        terrain_type="generator",
+        terrain_generator=ROUGH_TERRAINS_CFG,
+        max_init_terrain_level=5,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -67,7 +97,15 @@ class MySceneCfg(InteractiveSceneCfg):
     )
     # robots
     robot: ArticulationCfg = ANYMAL_D_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-     # sensors
+    # sensors
+    height_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/base",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+    )
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
     # lights
     sky_light = AssetBaseCfg(
@@ -128,7 +166,13 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
         actions = ObsTerm(func=mdp.last_action)
-        binary_map_local = ObsTerm(func=mdp.binary_map_local)
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-1.0, 1.0),
+        )
+        #binary_map_local = ObsTerm(func=mdp.binary_map_local)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -149,8 +193,14 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
         actions = ObsTerm(func=mdp.last_action)
-        binary_map_local = ObsTerm(func=mdp.binary_map_local)
-        
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-1.0, 1.0),
+        )
+        #binary_map_local = ObsTerm(func=mdp.binary_map_local)
+
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
@@ -241,31 +291,31 @@ class EventCfg:
     )
 
     #binary map event setup
-    binary_map_reset = EventTerm(
-        func=mdp.randomize_global_binary_map,
-        mode="reset",
-        params={
-            "map_h": BinaryMapGeomCfg.MAP_H,
-            "map_w": BinaryMapGeomCfg.MAP_W,
-            "map_res": BinaryMapGeomCfg.MAP_RES,
-            "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
-            "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
-            "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
-            "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
-            "add_border": BinaryMapGeomCfg.ADD_BORDER,
-        },
-    )
+    # binary_map_reset = EventTerm(
+    #     func=mdp.randomize_global_binary_map,
+    #     mode="reset",
+    #     params={
+    #         "map_h": BinaryMapGeomCfg.MAP_H,
+    #         "map_w": BinaryMapGeomCfg.MAP_W,
+    #         "map_res": BinaryMapGeomCfg.MAP_RES,
+    #         "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
+    #         "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
+    #         "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
+    #         "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
+    #         "add_border": BinaryMapGeomCfg.ADD_BORDER,
+    #     },
+    # )
 
-    #binary map interval
-    binary_map_interval_update = EventTerm(
-        func=mdp.update_dynamic_binary_patches,
-        mode="interval",
-        interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
-        params={
-            "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
-            "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
-        },
-    )
+    # #binary map interval
+    # binary_map_interval_update = EventTerm(
+    #     func=mdp.update_dynamic_binary_patches,
+    #     mode="interval",
+    #     interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
+    #     params={
+    #         "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
+    #         "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
+    #     },
+    # )
 
 
 @configclass
@@ -287,7 +337,7 @@ class RewardsCfg:
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     feet_air_time = RewTerm(
         func=mdp.feet_air_time,
-        weight=0.5,
+        weight=0.125,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
             "command_name": "base_velocity",
@@ -299,18 +349,18 @@ class RewardsCfg:
         weight=-1.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*THIGH"), "threshold": 1.0},
     )
-        # -- binary map penalty: fires when any foot contacts a forbidden map cell
-    forbidden_patch = RewTerm(
-        func=mdp.forbidden_patch_penalty,
-        weight=-0.5,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
-            "contact_threshold": 1.0,
-        },
-    )
+    # -- binary map penalty: fires when any foot contacts a forbidden map cell
+    # forbidden_patch = RewTerm(
+    #     func=mdp.forbidden_patch_penalty,
+    #     weight=-0.5,
+    #     params={
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
+    #         "contact_threshold": 1.0,
+    #     },
+    # )
     # -- optional penalties
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-2.5)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
 
 
@@ -329,6 +379,8 @@ class TerminationsCfg:
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
+
+    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
 
 ##
@@ -371,8 +423,59 @@ class PLRLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
+        if self.scene.height_scanner is not None:
+            self.scene.height_scanner.update_period = self.decimation * self.sim.dt
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
+
+        # check if terrain levels curriculum is enabled - if so, enable curriculum for terrain generator
+        if getattr(self.curriculum, "terrain_levels", None) is not None:
+            if self.scene.terrain.terrain_generator is not None:
+                self.scene.terrain.terrain_generator.curriculum = True
+        else:
+            if self.scene.terrain.terrain_generator is not None:
+                self.scene.terrain.terrain_generator.curriculum = False
+
+@configclass
+class PLRLocomotionEasyEnvCfg(PLRLocomotionEnvCfg):
+    """Easy terrain variant: gentle bumps/slopes, proprioceptive-only, friction variation, pushing."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        # Replace with gentle terrain: small random bumps, mild waves, shallow slopes
+        self.scene.terrain.terrain_generator = EASY_TERRAINS_CFG
+        self.scene.terrain.max_init_terrain_level = None  # random spawn across all (all easy)
+
+        # Remove height scanner — robot learns proprioceptive-only walking
+        self.scene.height_scanner = None
+        self.observations.policy.height_scan = None
+        self.observations.critic.height_scan = None
+
+        # Disable terrain curriculum so difficulty stays fixed
+        self.curriculum.terrain_levels = None
+        self.scene.terrain.terrain_generator.curriculum = False
+
+        # Vary friction so the robot learns to handle slippery/grippy patches
+        self.events.physics_material.params["static_friction_range"] = (0.6, 1.2)
+        self.events.physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
+
+
+@configclass
+class PLRLocomotionEasyEnvPlayCfg(PLRLocomotionEasyEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.scene.num_envs = 16
+        self.scene.env_spacing = 2.5
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 5
+            self.scene.terrain.terrain_generator.num_cols = 5
+
+        self.observations.policy.enable_corruption = False
+        self.events.base_external_force_torque = None
+        self.events.push_robot = None
+
 
 @configclass
 class PLRLocomotionEnvPlayCfg(PLRLocomotionEnvCfg):
@@ -382,10 +485,17 @@ class PLRLocomotionEnvPlayCfg(PLRLocomotionEnvCfg):
 
         # make a smaller scene for play
         self.scene.num_envs = 16
-        # env spacing 
         self.scene.env_spacing = 2.5
+        # spawn the robot randomly in the grid (instead of their terrain levels)
+        self.scene.terrain.max_init_terrain_level = None
+        # reduce the number of terrains to save memory
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 5
+            self.scene.terrain.terrain_generator.num_cols = 5
+            self.scene.terrain.terrain_generator.curriculum = False
+
         # disable randomization for play
         self.observations.policy.enable_corruption = False
         # remove random pushing event
-        # self.events.base_external_force_torque = None
-        # self.events.push_robot = None
+        self.events.base_external_force_torque = None
+        self.events.push_robot = None

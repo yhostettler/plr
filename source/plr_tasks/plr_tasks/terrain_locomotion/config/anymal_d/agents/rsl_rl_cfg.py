@@ -5,7 +5,7 @@
 
 from isaaclab.utils import configclass
 
-from plr_tasks.config.rl_cfg import (
+from plr_tasks.terrain_locomotion.config.rl_cfg import (
     RslRlOnPolicyRunnerCfg,
     RslRlPpoActorCriticCfg,
     RslRlPpoAlgorithmCfg,
@@ -19,7 +19,7 @@ class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 500
     logger = "wandb"
     wandb_project = "plr_tasks_anymal_d"
-    experiment_name = "anymal_navigation_ppo"
+    experiment_name = "anymal_terrain_locomotion_ppo"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
         class_name="ActorCriticRecurrent",
@@ -34,7 +34,7 @@ class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     )
     algorithm = RslRlPpoAlgorithmCfg(
         class_name="PPO",
-        value_loss_coef=0.1,
+        value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
         entropy_coef=0.005,
@@ -42,7 +42,7 @@ class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         num_mini_batches=4,
         learning_rate=1.0e-3,
         schedule="adaptive",
-        gamma=0.995,
+        gamma=0.99,
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,

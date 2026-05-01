@@ -12,11 +12,11 @@ import torch
 
 from isaaclab.envs import ManagerBasedRLEnv
 
-from plr_tasks.managers.ema_manager import EMAManager
-import plr_tasks.mdp.markers as mdp_markers
+from plr_tasks.terrain_locomotion.managers.ema_manager import EMAManager
+import plr_tasks.terrain_locomotion.mdp.markers as mdp_markers
 
 if TYPE_CHECKING:
-    from plr_tasks.env_cfg import PLRLocomotionEnvCfg
+    from plr_tasks.terrain_locomotion.env_cfg import PLRLocomotionEnvCfg
 
 
 class PLRLocomotionEnv(ManagerBasedRLEnv):
@@ -49,12 +49,13 @@ class PLRLocomotionEnv(ManagerBasedRLEnv):
         # VisualizationMarkers can be safely constructed.
         # ManagerBasedRLEnv has no set_debug_vis hook, so this is the earliest
         # reliable place to create markers.
-        if self.cfg.debug_vis and self.sim.has_gui():
-            self._map_vis_markers = mdp_markers.create_binary_map_markers()
-            self._map_vis_last_map: torch.Tensor | None = None
-        else:
-            self._map_vis_markers = None
-            self._map_vis_last_map = None
+
+        # if self.cfg.debug_vis and self.sim.has_gui():
+        #     self._map_vis_markers = mdp_markers.create_binary_map_markers()
+        #     self._map_vis_last_map: torch.Tensor | None = None
+        # else:
+        #     self._map_vis_markers = None
+        #     self._map_vis_last_map = None
 
     def step(self, action: torch.Tensor):
         obs, rew, terminated, truncated, info = super().step(action)
@@ -62,15 +63,16 @@ class PLRLocomotionEnv(ManagerBasedRLEnv):
         # Call update_forbidden_markers for env 0 on every step, but only
         # re-upload geometry when the map actually changed (i.e. after a reset
         # of env 0). The hot path is a single torch.equal — negligible overhead.
-        if self._map_vis_markers is not None and hasattr(self, "plr_global_binary_map"):
-            current_map = self.plr_global_binary_map[0]  # (H, W)
-            if self._map_vis_last_map is None or not torch.equal(current_map, self._map_vis_last_map):
-                mdp_markers.update_forbidden_markers(
-                    self._map_vis_markers,
-                    current_map,
-                    self.plr_map_origin_xy,
-                    float(self.plr_map_resolution),
-                )
-                self._map_vis_last_map = current_map.clone()
+
+        # if self._map_vis_markers is not None and hasattr(self, "plr_global_binary_map"):
+        #     current_map = self.plr_global_binary_map[0]  # (H, W)
+        #     if self._map_vis_last_map is None or not torch.equal(current_map, self._map_vis_last_map):
+        #         mdp_markers.update_forbidden_markers(
+        #             self._map_vis_markers,
+        #             current_map,
+        #             self.plr_map_origin_xy,
+        #             float(self.plr_map_resolution),
+        #         )
+        #         self._map_vis_last_map = current_map.clone()
 
         return obs, rew, terminated, truncated, info
