@@ -4,3 +4,4 @@
 # SPDX-License-Identifier: MIT
 
 from . import terrain_locomotion  # noqa: F401 — triggers gym.register() calls
+from . import forward_patch_locomotion  # noqa: F401 — triggers gym.register() calls
