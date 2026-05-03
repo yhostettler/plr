@@ -460,6 +460,11 @@ class PLRLocomotionEasyEnvCfg(PLRLocomotionEnvCfg):
         self.events.physics_material.params["static_friction_range"] = (0.6, 1.2)
         self.events.physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
 
+        # Modify rewards: reduce velocity tracking rewards (since it's easier terrain), increase feet air time reward (to encourage dynamic walking), add a small penalty on orientation (to encourage staying upright without being too strict)
+        self.rewards.flat_orientation_l2.weight = -5.0
+        self.rewards.dof_torques_l2.weight = -2.5e-5
+        self.rewards.feet_air_time.weight = 0.5
+
 
 @configclass
 class PLRLocomotionEasyEnvPlayCfg(PLRLocomotionEasyEnvCfg):
