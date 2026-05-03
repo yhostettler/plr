@@ -42,6 +42,8 @@ parser.add_argument("--num_envs", type=int, default=None, help="Number of enviro
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--use_last_checkpoint", action="store_true", help="Use last checkpoint from logs.")
+parser.add_argument("--export_jit", action="store_true", default=False, help="Export policy as JIT module.")
+parser.add_argument("--export_onnx", action="store_true", default=False, help="Export policy as ONNX model.")
 
 # Binary-map playback
 parser.add_argument("--debug_vis", action="store_true", default=False, help="Draw binary map forbidden cells in the viewport (live map, no trace needed).")
@@ -54,6 +56,7 @@ args_cli, hydra_args = parser.parse_known_args()
 
 # Always enable cameras for play/visualization
 args_cli.enable_cameras = True
+
 
 # -----------------------------------------------------------------------------
 # Launch app BEFORE importing Isaac Sim dependent modules
@@ -75,7 +78,6 @@ import plr_tasks  # noqa: F401
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
 
-import plr_tasks.terrain_locomotion.mdp as mdp
 import plr_tasks.terrain_locomotion.mdp.markers as mdp_markers
 
 
@@ -111,6 +113,68 @@ def find_latest_checkpoint(log_path: str, checkpoint_pattern: str = r"model_.*\.
     checkpoint_files.sort(key=lambda name: f"{name:0>15}")
     latest_checkpoint = checkpoint_files[-1]
     return os.path.join(run_path, latest_checkpoint)
+
+
+def load_checkpoint_with_fallback(
+    runner: OnPolicyRunner,
+    checkpoint_path: str,
+    load_optimizer: bool = True,
+) -> None:
+    """Load checkpoint with compatibility handling."""
+    print(f"[INFO] Loading checkpoint from: {checkpoint_path}")
+
+    loaded_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+    if runner.is_mdpo:
+        runner.alg.actor_critic_1.load_state_dict(loaded_dict["model_state_dict"], strict=True)
+        runner.alg.actor_critic_2.load_state_dict(loaded_dict["model_state_dict"], strict=True)
+    else:
+        runner.alg.actor_critic.load_state_dict(loaded_dict["model_state_dict"], strict=True)
+
+    if runner.empirical_normalization:
+        runner.obs_normalizer.load_state_dict(loaded_dict["obs_norm_state_dict"])
+        runner.critic_obs_normalizer.load_state_dict(loaded_dict["critic_obs_norm_state_dict"])
+
+    if load_optimizer:
+        if runner.is_mdpo:
+            runner.alg.optimizer_1.load_state_dict(loaded_dict["optimizer_state_dict"])
+        else:
+            runner.alg.optimizer.load_state_dict(loaded_dict["optimizer_state_dict"])
+
+    runner.current_learning_iteration = loaded_dict["iter"]
+    print(f"[INFO] Loaded checkpoint from iteration {loaded_dict['iter']}")
+
+
+def export_policy_jit(runner: OnPolicyRunner, checkpoint_path: str) -> None:
+    """Export policy as JIT module to an 'export' folder next to the checkpoint."""
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    export_dir = os.path.join(checkpoint_dir, "export")
+
+    actor_critic = runner.alg.actor_critic_1 if runner.is_mdpo else runner.alg.actor_critic
+    normalizer = runner.obs_normalizer if runner.empirical_normalization else None
+
+    print(f"[INFO] Exporting JIT policy to: {export_dir}")
+    actor_critic.export_jit(path=export_dir, filename="policy.pt", normalizer=normalizer)
+    print("[INFO] JIT export complete!")
+
+
+def export_policy_onnx(runner: OnPolicyRunner, checkpoint_path: str) -> None:
+    """Export policy as ONNX model to an 'export' folder next to the checkpoint."""
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    export_dir = os.path.join(checkpoint_dir, "export")
+
+    actor_critic = runner.alg.actor_critic_1 if runner.is_mdpo else runner.alg.actor_critic
+    normalizer = runner.obs_normalizer if runner.empirical_normalization else None
+
+    if not hasattr(actor_critic, "export_onnx"):
+        raise NotImplementedError(
+            f"ONNX export not implemented for {type(actor_critic).__name__}. "
+            "Please add an export_onnx method to this module."
+        )
+
+    print(f"[INFO] Exporting ONNX policy to: {export_dir}")
+    actor_critic.export_onnx(path=export_dir, filename="policy.onnx", normalizer=normalizer)
+    print("[INFO] ONNX export complete!")
 
 
 # -----------------------------------------------------------------------------
@@ -156,6 +220,13 @@ def main() -> None:
         resume_path = find_latest_checkpoint(log_root_path, checkpoint_pattern=r"model_.*\.pt")
 
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+    load_checkpoint_with_fallback(runner, resume_path)
+
+    if args_cli.export_jit:
+        export_policy_jit(runner, resume_path)
+
+    if args_cli.export_onnx:
+        export_policy_onnx(runner, resume_path)
 
     policy = runner.get_inference_policy(device=env.unwrapped.device)
 
