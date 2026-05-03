@@ -43,25 +43,15 @@ from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 EASY_TERRAINS_CFG = TerrainGeneratorCfg(
     size=(8.0, 8.0),
     border_width=10.0,
-    num_rows=6,
-    num_cols=12,
+    num_rows=10,
+    num_cols=20,
     horizontal_scale=0.1,
     vertical_scale=0.005,
     slope_threshold=0.75,
-    difficulty_range=(0.0, 0.4),
     use_cache=False,
     sub_terrains={
-        # 50% height field where each point is sampled independently from a uniform random distribution
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.5, noise_range=(0.01, 0.04), noise_step=0.01, border_width=0.25
-        ),
-        # 0.25% smooth sinusoidal height field — think gentle rolling hills or a warehouse floor with slight bowing
-        "wave": terrain_gen.HfWaveTerrainCfg(
-            proportion=0.25, amplitude_range=(0.02, 0.06), num_waves=3
-        ),
-        # 0.25% flat central platform surrounded by four triangular ramps leading down (or up) to the border — like a low pyramid
-        "slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.25, slope_range=(0.0, 0.15), platform_width=2.0, border_width=0.25
+            proportion=1.0, noise_range=(0.02, 0.04), noise_step=0.01, border_width=0.25
         ),
     },
 )
@@ -443,18 +433,15 @@ class PLRLocomotionEasyEnvCfg(PLRLocomotionEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        # Replace with gentle terrain: small random bumps, mild waves, shallow slopes
+        # Fixed uniform random-rough terrain, no curriculum
         self.scene.terrain.terrain_generator = EASY_TERRAINS_CFG
-        self.scene.terrain.max_init_terrain_level = None  # random spawn across all (all easy)
+        self.scene.terrain.max_init_terrain_level = None
+        self.curriculum.terrain_levels = None
 
         # Remove height scanner — robot learns proprioceptive-only walking
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
         self.observations.critic.height_scan = None
-
-        # Disable terrain curriculum so difficulty stays fixed
-        self.curriculum.terrain_levels = None
-        self.scene.terrain.terrain_generator.curriculum = False
 
         # Vary friction so the robot learns to handle slippery/grippy patches
         self.events.physics_material.params["static_friction_range"] = (0.6, 1.2)
@@ -474,8 +461,7 @@ class PLRLocomotionEasyEnvPlayCfg(PLRLocomotionEasyEnvCfg):
         self.scene.num_envs = 16
         self.scene.env_spacing = 2.5
         if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
+            self.scene.terrain.terrain_generator.num_rows = 4
 
         self.observations.policy.enable_corruption = False
         self.events.base_external_force_torque = None
