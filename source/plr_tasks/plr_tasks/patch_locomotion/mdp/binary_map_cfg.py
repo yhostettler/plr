@@ -11,8 +11,8 @@ class BinaryMapGeomCfg:
 
 class BinaryMapResetCfg:
     """Reset-time randomization of the global map."""
-    NUM_RECTANGLES_MIN = 25
-    NUM_RECTANGLES_MAX = 40
+    NUM_RECTANGLES_MIN = 80
+    NUM_RECTANGLES_MAX = 100
     MIN_RECT_SIZE = 4
     MAX_RECT_SIZE = 4
 
