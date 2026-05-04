@@ -142,135 +142,56 @@ def forbidden_patch_penalty(
     sensor_cfg: SceneEntityCfg,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=".*FOOT"),
     contact_threshold: float = 1.0,
+    base_penalty_scale: float = 0.1,
 ) -> torch.Tensor:
-    """Penalize the robot when any foot makes contact with a forbidden map cell.
+    """Penalize the robot for foot contact on or base position over a forbidden map cell.
 
-    The global binary map uses the convention:
-        0.0 = forbidden  (obstacle / restricted zone)
-        1.0 = allowed    (free space)
+    Returns a per-env scalar:
+        - 1.0 if any foot is in contact with a forbidden cell
+        - ``base_penalty_scale`` if the base XY is over a forbidden cell (but no foot contact)
+        - Both can stack if both conditions hold simultaneously.
 
-    A foot counts as "stepping" only when its ground-contact force exceeds
-    ``contact_threshold``.  Hovering feet are ignored even if their XY
-    projection falls over a forbidden cell.
-
-    This function returns 1.0 for every environment where at least one foot
-    is both in contact with the ground AND projected onto a forbidden map cell,
-    and 0.0 otherwise.  The actual penalty magnitude is controlled by the
-    negative weight in RewardTermCfg (e.g. weight=-0.5).
-
-    Args:
-        env: The RL environment, expected to carry the binary map attributes
-             set by the ``randomize_global_binary_map`` event:
-               - ``env.plr_global_binary_map``  (num_envs, H, W) float tensor
-               - ``env.plr_map_origin_xy``       (2,) tensor, world-frame XY of
-                                                  map cell (0, 0) in metres
-               - ``env.plr_map_resolution``      float, metres per cell
-        sensor_cfg: Contact sensor config with ``body_names=".*FOOT"`` so that
-                    ``sensor_cfg.body_ids`` resolves to the foot contact bodies.
-                    Must be passed through ``RewardTermCfg.params`` for the
-                    manager framework to resolve body IDs.
-        asset_cfg: Articulation config with ``body_names=".*FOOT"`` so that
-                   ``asset_cfg.body_ids`` resolves to the foot rigid bodies.
-                   Must be passed through ``RewardTermCfg.params``.
-        contact_threshold: Minimum net contact force magnitude (N) for a foot
-                           to be considered in contact with the ground.
-
-    Returns:
-        Tensor of shape (num_envs,) with values in {0.0, 1.0}.
-
-    Note:
-        Before the first reset event the map does not yet exist on ``env``.
-        The early-out guard returns zeros in that case so the reward manager
-        does not crash during the very first step.
+    ``base_penalty_scale`` is intentionally < 1.0 because the base hovers over a region
+    for many consecutive steps, so it accumulates faster than a transient foot contact.
     """
-    # The binary map is written onto env by the reset event (randomize_global_binary_map).
-    # On the very first call before any reset has run, the attribute does not exist yet.
-    # Return an all-zero tensor so the reward manager does not crash on that first step.
-    if not hasattr(env, "plr_global_binary_map"):
-        return torch.zeros(env.num_envs, device=env.device)
+    if not hasattr(env, "plr_global_binary_map"):  # map not yet created by reset event
+        return torch.zeros(env.num_envs, device=env.device)  # safe zero penalty before first reset
 
-    # -------------------------------------------------------------------------
-    # Step 1 — Build a per-foot ground-contact mask
-    # -------------------------------------------------------------------------
+    asset = env.scene[asset_cfg.name]  # articulation handle (robot)
+    origin_x = env.plr_map_origin_xy[0]  # world X of map column 0
+    origin_y = env.plr_map_origin_xy[1]  # world Y of map row 0
+    map_res = float(env.plr_map_resolution)  # metres per cell
+    map_h, map_w = env.plr_global_binary_map.shape[0], env.plr_global_binary_map.shape[1]  # map size in cells
 
-    # Retrieve the contact sensor object from the scene by name.
-    # Type annotation lets IDEs resolve the ContactSensor API.
-    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-
-    # net_forces_w_history has shape (num_envs, history_len, num_bodies, 3).
-    # We index dim=2 with sensor_cfg.body_ids to keep only the foot bodies,
-    # giving (num_envs, history_len, num_feet, 3).
-    # .norm(dim=-1) collapses the xyz force vector to a scalar magnitude,
-    # giving (num_envs, history_len, num_feet).
-    # .max(dim=1)[0] takes the maximum magnitude over the history window,
-    # giving (num_envs, num_feet).
-    # Using the max (rather than the current frame only) means a foot that
-    # touched down one or two physics sub-steps ago is still counted as active.
+    # ------------------------------------------------------------------
+    # Foot-contact penalty
+    # ------------------------------------------------------------------
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]  # contact sensor handle
     contact_force_norm = (
-        contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
-        .norm(dim=-1)
-        .max(dim=1)[0]
-    )  # (num_envs, num_feet)
+        contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]  # (num_envs, hist, num_feet, 3)
+        .norm(dim=-1)  # scalar force magnitude per foot per history step → (num_envs, hist, num_feet)
+        .max(dim=1)[0]  # max over history window → (num_envs, num_feet)
+    )
+    in_contact = contact_force_norm > contact_threshold  # True where foot is pressing the ground (num_envs, num_feet)
 
-    # Boolean mask: True where the contact force exceeds the threshold (N).
-    # Feet that are swinging or hovering have near-zero force and are False here.
-    in_contact = contact_force_norm > contact_threshold  # (num_envs, num_feet)
+    foot_xy = asset.data.body_pos_w[:, asset_cfg.body_ids, :2]  # world XY of each foot (num_envs, num_feet, 2)
+    foot_col = ((foot_xy[:, :, 0] - origin_x) / map_res).long().clamp(0, map_w - 1)  # foot world X → map column index
+    foot_row = ((foot_xy[:, :, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)  # foot world Y → map row index
+    foot_map_values = env.plr_global_binary_map[foot_row, foot_col]  # map cell value under each foot (num_envs, num_feet)
 
-    # -------------------------------------------------------------------------
-    # Step 2 — Collect world-frame XY positions of all foot bodies
-    # -------------------------------------------------------------------------
+    foot_penalty = ((foot_map_values < 0.5) & in_contact).any(dim=1).float()  # 1.0 if any foot contacts a forbidden cell
 
-    # body_pos_w has shape (num_envs, num_bodies, 3) in world frame (metres).
-    # Indexing dim=1 with asset_cfg.body_ids selects only the foot links,
-    # giving (num_envs, num_feet, 3).
-    # Slicing :2 on the last dim drops Z; we only need the ground-plane XY.
-    asset = env.scene[asset_cfg.name]
-    foot_xy = asset.data.body_pos_w[:, asset_cfg.body_ids, :2]  # (num_envs, num_feet, 2)
-    num_feet = foot_xy.shape[1]                                  # e.g. 4 for a quadruped
+    # ------------------------------------------------------------------
+    # Base-over-forbidden penalty (weighted lower — persists many steps)
+    # ------------------------------------------------------------------
+    base_xy = asset.data.root_pos_w[:, :2]  # world XY of the robot base (num_envs, 2)
+    base_col = ((base_xy[:, 0] - origin_x) / map_res).long().clamp(0, map_w - 1)  # base world X → map column index
+    base_row = ((base_xy[:, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)  # base world Y → map row index
+    base_map_values = env.plr_global_binary_map[base_row, base_col]  # map cell value under the base (num_envs,)
 
-    # -------------------------------------------------------------------------
-    # Step 3 — Convert world-frame XY to integer map pixel indices
-    # -------------------------------------------------------------------------
+    base_penalty = (base_map_values < 0.5).float() * base_penalty_scale  # base_penalty_scale if base is over forbidden cell
 
-    # plr_map_origin_xy holds the world-frame XY coordinate (metres) that
-    # corresponds to pixel (row=0, col=0) in plr_global_binary_map.
-    origin_x = env.plr_map_origin_xy[0]   # world X that maps to column 0
-    origin_y = env.plr_map_origin_xy[1]   # world Y that maps to row 0
-
-    # plr_map_resolution is the side length of one pixel in metres (e.g. 0.1 m).
-    map_res = float(env.plr_map_resolution)
-
-    # Map dimensions in pixels, read from the tensor shape rather than the cfg
-    # to stay correct even if the map is ever rebuilt at a different size.
-    map_h, map_w = env.plr_global_binary_map.shape[0], env.plr_global_binary_map.shape[1]
-
-    col = ((foot_xy[:, :, 0] - origin_x) / map_res).long().clamp(0, map_w - 1)  # (num_envs, num_feet)
-    row = ((foot_xy[:, :, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)  # (num_envs, num_feet)
-
-    # -------------------------------------------------------------------------
-    # Step 4 — Look up the map value for every foot in every environment
-    # -------------------------------------------------------------------------
-
-    # Shared (H, W) map: index with 2D (row, col) tensors directly.
-    map_values = env.plr_global_binary_map[row, col]  # (num_envs, num_feet)
-
-    # -------------------------------------------------------------------------
-    # Step 5 — Combine map and contact masks; return the per-env penalty signal
-    # -------------------------------------------------------------------------
-
-    # A foot is penalised only when BOTH conditions hold simultaneously:
-    #   (a) map_values < 0.5  →  the cell is forbidden (value 0.0).
-    #       The 0.5 threshold is robust to any float rounding in the map tensor.
-    #   (b) in_contact is True  →  the foot is actually pressing on the ground.
-    # The bitwise AND combines the two boolean (num_envs, num_feet) masks.
-    forbidden_and_contact = (map_values < 0.5) & in_contact  # (num_envs, num_feet)
-
-    # .any(dim=1) reduces over the foot dimension: True if at least one foot
-    # of that environment satisfies both conditions.
-    # .float() converts True/False to 1.0/0.0 for the reward computation.
-    # The RewardTermCfg weight (e.g. -0.5) is applied by the reward manager
-    # after this function returns.
-    return forbidden_and_contact.any(dim=1).float()  # (num_envs,)
+    return foot_penalty + base_penalty  # combined penalty; overall magnitude set by RewardTermCfg weight
 
 
 # reward for tracking of angular velocity around z-axis (EMA)

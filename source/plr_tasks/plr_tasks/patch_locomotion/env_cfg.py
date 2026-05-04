@@ -30,7 +30,6 @@ import plr_tasks.patch_locomotion.mdp as mdp
 from .mdp.binary_map_cfg import (
     BinaryMapGeomCfg,
     BinaryMapResetCfg,
-    BinaryMapIntervalCfg,
 )
 from .managers.ema_manager_cfg import EMAManagerCfg
 
@@ -346,15 +345,16 @@ class RewardsCfg:
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*THIGH"), "threshold": 1.0},
     )
     # -- binary map penalty: fires when any foot contacts a forbidden map cell
-    # forbidden_patch = RewTerm(
-    #     func=mdp.forbidden_patch_penalty,
-    #     weight=-0.5,
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
-    #         "contact_threshold": 1.0,
-    #     },
-    # )
+    forbidden_patch = RewTerm(
+        func=mdp.forbidden_patch_penalty,
+        weight=-0.5,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
+            "contact_threshold": 1.0,
+            "base_penalty_scale": 0.1,
+        },
+    )
     # -- keep-alive: rewards surviving each step, counteracts early self-termination
     alive = RewTerm(func=mdp.is_alive, weight=2.0)
     # -- optional penalties
