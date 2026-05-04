@@ -350,6 +350,8 @@ class RewardsCfg:
     #         "contact_threshold": 1.0,
     #     },
     # )
+    # -- keep-alive: rewards surviving each step, counteracts early self-termination
+    alive = RewTerm(func=mdp.is_alive, weight=2.0)
     # -- optional penalties
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
