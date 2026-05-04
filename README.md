@@ -24,6 +24,8 @@ for the patch locomotion task:
 
 python source/plr/source/plr_tasks/scripts/rsl_rl/train.py --task=Isaac-Anymal-Patch-v0 --debug_vis --video --headless
 
+./docker/cluster/cluster_interface.sh job base-plr --task=Isaac-Anymal-Patch-v0 --debug_vis  --video --headless
+
 note: disable WANDB for this terminal session:
 
 export WANDB_MODE=disabled
