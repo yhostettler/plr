@@ -141,12 +141,13 @@ def base_over_forbidden_patch(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Penalise the robot whenever its base XY position projects onto a forbidden map cell.
+    """Penalise the robot based on proximity of its base to any forbidden map cell.
 
-    Fires every step the robot is positioned over a patch — no contact gating.
-    Returns 1.0 for forbidden, 0.0 for free.  Apply a negative weight in RewardTermCfg.
+    Uses the Gaussian soft penalty map so the signal is continuous rather than
+    binary — the penalty grows smoothly as the base approaches a patch centre.
+    Apply a negative weight in RewardTermCfg.
     """
-    if not hasattr(env, "plr_global_binary_map"):
+    if not hasattr(env, "plr_soft_penalty_map"):
         return torch.zeros(env.num_envs, device=env.device)
 
     asset = env.scene[asset_cfg.name]
@@ -155,13 +156,12 @@ def base_over_forbidden_patch(
     origin_x = env.plr_map_origin_xy[0]
     origin_y = env.plr_map_origin_xy[1]
     map_res = float(env.plr_map_resolution)
-    map_h, map_w = env.plr_global_binary_map.shape[0], env.plr_global_binary_map.shape[1]
+    map_h, map_w = env.plr_soft_penalty_map.shape[0], env.plr_soft_penalty_map.shape[1]
 
     col = ((base_xy[:, 0] - origin_x) / map_res).long().clamp(0, map_w - 1)
     row = ((base_xy[:, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)
 
-    map_values = env.plr_global_binary_map[row, col]  # (num_envs,)
-    return (map_values < 0.5).float()
+    return env.plr_soft_penalty_map[row, col]  # (num_envs,), in [0, 1]
 
 # updated to one global map only
 def forbidden_patch_penalty(
@@ -210,10 +210,7 @@ def forbidden_patch_penalty(
         The early-out guard returns zeros in that case so the reward manager
         does not crash during the very first step.
     """
-    # The binary map is written onto env by the reset event (randomize_global_binary_map).
-    # On the very first call before any reset has run, the attribute does not exist yet.
-    # Return an all-zero tensor so the reward manager does not crash on that first step.
-    if not hasattr(env, "plr_global_binary_map"):
+    if not hasattr(env, "plr_soft_penalty_map"):
         return torch.zeros(env.num_envs, device=env.device)
 
     # -------------------------------------------------------------------------
@@ -269,7 +266,7 @@ def forbidden_patch_penalty(
 
     # Map dimensions in pixels, read from the tensor shape rather than the cfg
     # to stay correct even if the map is ever rebuilt at a different size.
-    map_h, map_w = env.plr_global_binary_map.shape[0], env.plr_global_binary_map.shape[1]
+    map_h, map_w = env.plr_soft_penalty_map.shape[0], env.plr_soft_penalty_map.shape[1]
 
     # Subtract the map origin to get the foot position relative to pixel (0,0),
     # then divide by map_res to convert metres to fractional pixel coordinates,
@@ -282,29 +279,25 @@ def forbidden_patch_penalty(
     row = ((foot_xy[:, :, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)  # (num_envs, num_feet)
 
     # -------------------------------------------------------------------------
-    # Step 4 — Look up the map value for every foot in every environment
+    # Step 4 — Look up soft penalty value for every foot in every environment
     # -------------------------------------------------------------------------
 
-    # Shared (H,W) map: fancy-index directly with (num_envs, num_feet) row/col tensors.
-    map_values = env.plr_global_binary_map[row, col]  # (num_envs, num_feet)
+    # plr_soft_penalty_map is a (H, W) Gaussian-blurred version of the forbidden
+    # indicator: 1.0 at a patch centre, decaying smoothly to 0.0 far from patches.
+    # This replaces the binary 0/1 lookup to eliminate reward spikes.
+    soft_values = env.plr_soft_penalty_map[row, col]  # (num_envs, num_feet), in [0, 1]
 
     # -------------------------------------------------------------------------
-    # Step 5 — Combine map and contact masks; return the per-env penalty signal
+    # Step 5 — Gate by contact; sum over feet; return the per-env penalty signal
     # -------------------------------------------------------------------------
 
-    # A foot is penalised only when BOTH conditions hold simultaneously:
-    #   (a) map_values < 0.5  →  the cell is forbidden (value 0.0).
-    #       The 0.5 threshold is robust to any float rounding in the map tensor.
-    #   (b) in_contact is True  →  the foot is actually pressing on the ground.
-    # The bitwise AND combines the two boolean (num_envs, num_feet) masks.
-    forbidden_and_contact = (map_values < 0.5) & in_contact  # (num_envs, num_feet)
-
-    # .any(dim=1) reduces over the foot dimension: True if at least one foot
-    # of that environment satisfies both conditions.
-    # .float() converts True/False to 1.0/0.0 for the reward computation.
-    # The RewardTermCfg weight (e.g. -0.5) is applied by the reward manager
-    # after this function returns.
-    return forbidden_and_contact.any(dim=1).float()  # (num_envs,)
+    # Only penalise feet that are actually pressing on the ground.  Hovering
+    # feet contribute zero even if their XY projection is near a patch.
+    # Summing over feet means up to 4× the per-foot value — consistent with the
+    # old behaviour (which fired 1.0 if any foot was forbidden) but now
+    # proportional to how many feet and how close to patch centres they are.
+    penalty_per_foot = soft_values * in_contact.float()  # (num_envs, num_feet)
+    return penalty_per_foot.sum(dim=1)  # (num_envs,)
 
 
 # reward for tracking of angular velocity around z-axis (EMA)

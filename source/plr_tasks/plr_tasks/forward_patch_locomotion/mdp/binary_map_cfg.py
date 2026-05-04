@@ -9,6 +9,11 @@ class BinaryMapGeomCfg:
     MAP_H = 80   # cells in y (lateral)  — 80 × 0.5 m = 40 m
     MAP_W = 80   # cells in x (forward)  — 80 × 0.5 m = 40 m
     ADD_BORDER = False
+    # Gaussian sigma for the soft penalty map (in map cells).
+    # Rule of thumb: penalty drops to ~5 % at distance d_max_m from a patch:
+    #   SOFT_MAP_SIGMA = d_max_m / MAP_RES / sqrt(2 * ln(20))
+    # 1.2 cells × 0.5 m/cell = 0.6 m sigma  →  ~5 % cutoff at 1.5 m
+    SOFT_MAP_SIGMA: float = 1.2
 
 # updat: changed for new layout (Leon)
 class BinaryMapResetCfg:

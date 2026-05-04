@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from isaaclab.envs import ManagerBasedRLEnv
 
 from .binary_map_cfg import (
@@ -69,6 +70,28 @@ def _sample_rectangles_map(
 
     return grid
 
+def _build_soft_penalty_map(binary_map: torch.Tensor, sigma: float = BinaryMapGeomCfg.SOFT_MAP_SIGMA) -> torch.Tensor:
+    """Gaussian-blur the forbidden indicator to produce a smooth penalty field.
+
+    Computed once each time the binary map is (re)generated, then cached on env
+    as plr_soft_penalty_map.  Per-step cost is a single index lookup.
+
+    Returns (H, W) in [0, 1]: 1.0 at a patch centre, decaying outward.
+    Convention matches binary_map: forbidden cells (0.0) become 1.0 in the output.
+    """
+    radius = int(3 * sigma)
+    size = 2 * radius + 1
+    x = torch.arange(-radius, radius + 1, device=binary_map.device, dtype=torch.float32)
+    kernel_1d = torch.exp(-x ** 2 / (2.0 * sigma ** 2))
+    # Unnormalized: peak = 1.0 at distance 0, decaying as exp(-d²/2σ²).
+    # Do NOT normalize — we want the map value to reach 1.0 at a patch centre.
+    kernel_2d = kernel_1d.outer(kernel_1d).view(1, 1, size, size)
+
+    forbidden = (binary_map < 0.5).float().unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
+    soft = F.conv2d(forbidden, kernel_2d, padding=radius)
+    return soft.squeeze(0).squeeze(0).clamp(0.0, 1.0)  # (H, W)
+
+
 def place_checkerboard_patches(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor | None,
@@ -78,6 +101,7 @@ def place_checkerboard_patches(
     spawn_clear_m: float = BinaryMapCheckerCfg.SPAWN_CLEAR_M,
     grid_spacing: int = BinaryMapCheckerCfg.GRID_SPACING,
     jitter: int = BinaryMapCheckerCfg.JITTER,
+    soft_map_sigma: float = BinaryMapGeomCfg.SOFT_MAP_SIGMA,
 ) -> None:
     """Place single-cell forbidden patches on a regular grid with random jitter.
 
@@ -110,6 +134,7 @@ def place_checkerboard_patches(
         row_c += grid_spacing
 
     env.plr_global_binary_map = grid
+    env.plr_soft_penalty_map = _build_soft_penalty_map(grid, sigma=soft_map_sigma)
 
 
 # update: modified for new layout (Leon) -> new: single shared global binary map between all environments

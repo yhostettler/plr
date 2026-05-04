@@ -53,7 +53,7 @@ EASY_TERRAINS_CFG = TerrainGeneratorCfg(
     use_cache=False,
     sub_terrains={
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=1.0, noise_range=(0.02, 0.04), noise_step=0.01, border_width=0.25
+            proportion=1.0, noise_range=(0.02, 0.08), noise_step=0.01, border_width=0.25
         ),
     },
 )
@@ -326,10 +326,10 @@ class RewardsCfg:
         func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
     # track_ema_lin_vel_xy = RewTerm(
-    #     func=mdp.track_ema_lin_vel_xy, weight=0,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    #     func=mdp.track_ema_lin_vel_xy, weight=1.0,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     # )
     # track_ema_ang_vel_z = RewTerm(
-    #     func=mdp.track_ema_ang_vel_z, weight=0,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    #     func=mdp.track_ema_ang_vel_z, weight=0.5,  params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     # )
     # -- penalties
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
@@ -443,8 +443,7 @@ class PLRLocomotionForwardNoPatchEnvCfg(PLRLocomotionEnvCfg):
         self.scene.terrain.max_init_terrain_level = 0  # all robots assigned to col 0
         self.curriculum.terrain_levels = None
 
-        # Smaller env count for this validation task
-        self.scene.num_envs = 1000
+        self.scene.num_envs = 4096
 
         # Remove height scanner — proprioceptive-only walking
         self.scene.height_scanner = None
@@ -506,7 +505,7 @@ class PLRLocomotionForwardPatchEnvCfg(PLRLocomotionForwardNoPatchEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-
+        self.episode_length_s = 30.0
         # Enable flat binary map observation (flattened local crop, no CNN yet)
         self.observations.policy.binary_map_local = ObsTerm(func=mdp.binary_map_local)
         self.observations.critic.binary_map_local = ObsTerm(func=mdp.binary_map_local)
@@ -556,12 +555,27 @@ class PLRLocomotionForwardPatchEnvCfg(PLRLocomotionForwardNoPatchEnvCfg):
         self.curriculum.patch_penalty = CurrTerm(
             func=mdp.patch_penalty_curriculum,
             params={
-                "start_weight_base": -0.2,
-                "end_weight_base": -100.0,
-                "start_weight_foot": -0.2,
-                "end_weight_foot": -100.0,
+                "start_weight_base": -0.02,
+                "end_weight_base": -10.0,
+                "start_weight_foot": -0.02,
+                "end_weight_foot": -10.0,
                 "ramp_end_steps": 48_000,
             },
+        )
+
+        # Terminate when a foot contacts a forbidden cell (hard binary map).
+        self.terminations.foot_on_forbidden_patch = DoneTerm(
+            func=mdp.foot_on_forbidden_patch,
+            params={
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
+                "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
+                "contact_threshold": 1.0,
+            },
+        )
+        # Terminate when the base drifts directly over a forbidden cell.
+        self.terminations.base_over_forbidden_patch = DoneTerm(
+            func=mdp.base_over_forbidden_patch,
+            params={"asset_cfg": SceneEntityCfg("robot")},
         )
 
 

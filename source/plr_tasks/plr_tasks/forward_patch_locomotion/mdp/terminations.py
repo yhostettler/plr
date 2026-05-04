@@ -16,9 +16,82 @@ from typing import TYPE_CHECKING
 
 from isaaclab.assets import RigidObject
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.sensors import ContactSensor
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+
+def foot_on_forbidden_patch(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=".*FOOT"),
+    contact_threshold: float = 1.0,
+) -> torch.Tensor:
+    """Terminate when any foot makes contact with a forbidden map cell.
+
+    Uses the hard binary map (plr_global_binary_map, 0=forbidden / 1=allowed) rather than the
+    soft Gaussian penalty field, so the termination fires only when a foot is exactly on a
+    forbidden cell — not merely nearby.
+
+    Returns a bool tensor of shape (num_envs,): True where the episode should end.
+    """
+    if not hasattr(env, "plr_global_binary_map"):
+        return torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
+
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contact_force_norm = (
+        contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+        .norm(dim=-1)
+        .max(dim=1)[0]
+    )  # (num_envs, num_feet)
+    in_contact = contact_force_norm > contact_threshold  # (num_envs, num_feet)
+
+    asset = env.scene[asset_cfg.name]
+    foot_xy = asset.data.body_pos_w[:, asset_cfg.body_ids, :2]  # (num_envs, num_feet, 2)
+    num_feet = foot_xy.shape[1]
+
+    origin_x = env.plr_map_origin_xy[0]
+    origin_y = env.plr_map_origin_xy[1]
+    map_res = float(env.plr_map_resolution)
+    map_h, map_w = env.plr_global_binary_map.shape[0], env.plr_global_binary_map.shape[1]
+
+    col = ((foot_xy[:, :, 0] - origin_x) / map_res).long().clamp(0, map_w - 1)
+    row = ((foot_xy[:, :, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)
+
+    map_values = env.plr_global_binary_map[row, col]  # (num_envs, num_feet)
+
+    forbidden_and_contact = (map_values < 0.5) & in_contact  # (num_envs, num_feet)
+    return forbidden_and_contact.any(dim=1)  # (num_envs,)
+
+
+def base_over_forbidden_patch(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Terminate when the robot's base is directly over a forbidden map cell.
+
+    Uses the hard binary map (plr_global_binary_map) so the termination fires only when the
+    base XY projection lands exactly on a forbidden cell, not merely nearby.
+
+    Returns a bool tensor of shape (num_envs,): True where the episode should end.
+    """
+    if not hasattr(env, "plr_global_binary_map"):
+        return torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
+
+    asset = env.scene[asset_cfg.name]
+    base_xy = asset.data.root_pos_w[:, :2]  # (num_envs, 2)
+
+    origin_x = env.plr_map_origin_xy[0]
+    origin_y = env.plr_map_origin_xy[1]
+    map_res = float(env.plr_map_resolution)
+    map_h, map_w = env.plr_global_binary_map.shape[0], env.plr_global_binary_map.shape[1]
+
+    col = ((base_xy[:, 0] - origin_x) / map_res).long().clamp(0, map_w - 1)
+    row = ((base_xy[:, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)
+
+    map_values = env.plr_global_binary_map[row, col]  # (num_envs,)
+    return map_values < 0.5  # (num_envs,)
 
 
 def terrain_out_of_bounds(

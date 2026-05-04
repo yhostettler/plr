@@ -35,6 +35,9 @@ parser.add_argument("--seed", type=int, default=None, help="Random seed.")
 parser.add_argument("--max_iterations", type=int, default=None, help="Maximum number of learning iterations.")
 parser.add_argument("--run_name", type=str, default=None, help="Name of the wandb run (appended to log directory).")
 parser.add_argument("--debug_vis", action="store_true", default=False, help="Draw binary map forbidden cells in the viewport during training.")
+parser.add_argument("--resume", action="store_true", default=False, help="Resume training from a checkpoint.")
+parser.add_argument("--load_run", type=str, default=".*", help="Regex for the run directory to load (default: latest).")
+parser.add_argument("--load_checkpoint", type=str, default="model_.*.pt", help="Regex for the checkpoint file to load (default: latest).")
 
 # Isaac Lab app args
 AppLauncher.add_app_launcher_args(parser)
@@ -68,6 +71,7 @@ import plr_tasks  # noqa: F401
 
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
+from isaaclab_tasks.utils import get_checkpoint_path
 
 
 # -----------------------------------------------------------------------------
@@ -163,6 +167,15 @@ def main() -> None:
         log_dir=log_dir,
         device=agent_cfg.device,
     )
+
+    # -------------------------------------------------------------------------
+    # Resume from checkpoint (if requested)
+    # -------------------------------------------------------------------------
+
+    if args_cli.resume:
+        resume_path = get_checkpoint_path(os.path.abspath(log_root_path), args_cli.load_run, args_cli.load_checkpoint)
+        print(f"[INFO] Loading checkpoint from: {resume_path}", flush=True)
+        runner.load(resume_path)
 
     # -------------------------------------------------------------------------
     # Train
