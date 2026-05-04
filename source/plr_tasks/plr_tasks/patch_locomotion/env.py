@@ -16,7 +16,7 @@ from plr_tasks.patch_locomotion.managers.ema_manager import EMAManager
 import plr_tasks.patch_locomotion.mdp.markers as mdp_markers
 
 if TYPE_CHECKING:
-    from plr_tasks.patch_locomotion.env_cfg import PLRLocomotionEnvCfg
+    from plr_tasks.patch_locomotion.env_cfg import PLRPatchLocomotionEnvCfg
 
 
 class PLRLocomotionEnv(ManagerBasedRLEnv):
@@ -33,7 +33,7 @@ class PLRLocomotionEnv(ManagerBasedRLEnv):
     on every training step — that is the only injection point available.
     """
 
-    cfg: PLRLocomotionEnvCfg
+    cfg: PLRPatchLocomotionEnvCfg
 
     def load_managers(self):
         # Create the EMA manager before other managers so observation terms

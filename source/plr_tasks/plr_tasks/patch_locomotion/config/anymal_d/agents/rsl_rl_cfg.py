@@ -12,7 +12,7 @@ from plr_tasks.patch_locomotion.config.rl_cfg import (
 )
 
 @configclass
-class AnymalDFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class AnymalDPatchPPORunnerCfg(RslRlOnPolicyRunnerCfg):
    
     num_steps_per_env = 24
     max_iterations = 15000

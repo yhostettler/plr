@@ -40,18 +40,19 @@ from .managers.ema_manager_cfg import EMAManagerCfg
 from isaaclab_assets.robots.anymal import ANYMAL_D_CFG
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
+
 EASY_TERRAINS_CFG = TerrainGeneratorCfg(
-    size=(8.0, 8.0),
+    size=(32, 32),
     border_width=10.0,
-    num_rows=10,
-    num_cols=20,
+    num_rows=1,
+    num_cols=1,
     horizontal_scale=0.1,
     vertical_scale=0.005,
     slope_threshold=0.75,
     use_cache=False,
     sub_terrains={
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=1.0, noise_range=(0.02, 0.04), noise_step=0.01, border_width=0.25
+            proportion=1.0, noise_range=(0.02, 0.08), noise_step=0.01, border_width=0
         ),
     },
 )
@@ -379,8 +380,8 @@ class CurriculumCfg:
 
 
 @configclass
-class PLRLocomotionEnvCfg(ManagerBasedRLEnvCfg):
-    """Configuration for the locomotion velocity-tracking environment."""
+class PLRPatchLocomotionEnvCfg(ManagerBasedRLEnvCfg):
+    """Patch locomotion: flat easy terrain, proprioceptive-only, omnidirectional velocity commands."""
 
     # Scene settings
     scene: MySceneCfg = MySceneCfg(num_envs=4096, env_spacing=2.5)
@@ -394,99 +395,51 @@ class PLRLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
-    # EMA manager configuration for smoothed velocity tracking.
     ema_cfg: EMAManagerCfg = EMAManagerCfg()
-
-    # Draw forbidden binary-map cells as red cubes in the Isaac Sim viewport.
-    # Set to True via --debug_vis in train.py or directly on the cfg before gym.make().
     debug_vis: bool = False
 
     def __post_init__(self):
-        """Post initialization."""
-        # general settings
         self.decimation = 4
         self.episode_length_s = 20.0
-        # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
-        # update sensor update periods
-        # we tick all the sensors based on the smallest update period (physics update period)
-        if self.scene.height_scanner is not None:
-            self.scene.height_scanner.update_period = self.decimation * self.sim.dt
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
 
-        # check if terrain levels curriculum is enabled - if so, enable curriculum for terrain generator
-        if getattr(self.curriculum, "terrain_levels", None) is not None:
-            if self.scene.terrain.terrain_generator is not None:
-                self.scene.terrain.terrain_generator.curriculum = True
-        else:
-            if self.scene.terrain.terrain_generator is not None:
-                self.scene.terrain.terrain_generator.curriculum = False
-
-@configclass
-class PLRLocomotionEasyEnvCfg(PLRLocomotionEnvCfg):
-    """Easy terrain variant: gentle bumps/slopes, proprioceptive-only, friction variation, pushing."""
-
-    def __post_init__(self):
-        super().__post_init__()
-
-        # Fixed uniform random-rough terrain, no curriculum
+        # Flat easy terrain, no curriculum
         self.scene.terrain.terrain_generator = EASY_TERRAINS_CFG
         self.scene.terrain.max_init_terrain_level = None
         self.curriculum.terrain_levels = None
 
-        # Remove height scanner — robot learns proprioceptive-only walking
+        # Proprioceptive-only — no height scanner
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
         self.observations.critic.height_scan = None
 
-        # Vary friction so the robot learns to handle slippery/grippy patches
+        # Friction variation
         self.events.physics_material.params["static_friction_range"] = (0.6, 1.2)
         self.events.physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
 
-        # Modify rewards: reduce velocity tracking rewards (since it's easier terrain), increase feet air time reward (to encourage dynamic walking), add a small penalty on orientation (to encourage staying upright without being too strict)
         self.rewards.flat_orientation_l2.weight = -5.0
         self.rewards.dof_torques_l2.weight = -2.5e-5
         self.rewards.feet_air_time.weight = 0.5
 
 
 @configclass
-class PLRLocomotionEasyEnvPlayCfg(PLRLocomotionEasyEnvCfg):
+class PLRPatchLocomotionEnvPlayCfg(PLRPatchLocomotionEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
         self.scene.num_envs = 16
         self.scene.env_spacing = 2.5
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 4
-
-        self.observations.policy.enable_corruption = False
-        self.events.base_external_force_torque = None
-        self.events.push_robot = None
-
-
-@configclass
-class PLRLocomotionEnvPlayCfg(PLRLocomotionEnvCfg):
-    def __post_init__(self):
-        # post init of parent
-        super().__post_init__()
-
-        # make a smaller scene for play
-        self.scene.num_envs = 16
-        self.scene.env_spacing = 2.5
-        # spawn the robot randomly in the grid (instead of their terrain levels)
         self.scene.terrain.max_init_terrain_level = None
-        # reduce the number of terrains to save memory
         if self.scene.terrain.terrain_generator is not None:
             self.scene.terrain.terrain_generator.num_rows = 5
             self.scene.terrain.terrain_generator.num_cols = 5
             self.scene.terrain.terrain_generator.curriculum = False
 
-        # disable randomization for play
         self.observations.policy.enable_corruption = False
-        # remove random pushing event
         self.events.base_external_force_torque = None
         self.events.push_robot = None

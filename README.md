@@ -9,6 +9,7 @@ the ETH Legged Robotics **SRU-enhanced rsl_rl fork**
 ---
 
 ## Quick start
+
 training the current main task (headless):
 
 ./isaaclab.sh -p source/plr/source/plr_tasks/scripts/rsl_rl/train.py --num_envs 2048 --task Isaac-PLR-Velocity-Flat-Anymal-D-v0 --headless
@@ -19,20 +20,29 @@ to play a model:
 
 add --video to record a video
 
+for the patch locomotion task:
+
+python source/plr/source/plr_tasks/scripts/rsl_rl/train.py --task=Isaac-Anymal-Patch-v0 --debug_vis --video --headless
+
+note: disable WANDB for this terminal session:
+
+export WANDB_MODE=disabled
+
 ## Registered tasks
 
-| Gym ID | Purpose |
-|---|---|
+| Gym ID                                | Purpose               |
+| ------------------------------------- | --------------------- |
 | `Isaac-PLR-Velocity-Flat-Anymal-D-v0` | Current Latest Policy |
 
 ## Docs
 
-| File | Scope |
-|---|---|
-| [`docs/DOCKER.md`](docs/DOCKER.md) | Docker Install |
+| File                                 | Scope            |
+| ------------------------------------ | ---------------- |
+| [`docs/DOCKER.md`](docs/DOCKER.md)   | Docker Install   |
 | [`docs/CLUSTER.md`](docs/CLUSTER.md) | Cluster Workflow |
 
 ## Credits
+
 - Base env ported from Isaac Lab's `isaaclab_tasks/.../locomotion/velocity/anymal_d`.
 - Custom `rsl_rl` fork: [sru-navigation-learning](https://github.com/leggedrobotics/sru-navigation-learning).
 - Reference usage pattern: [sru-navigation-sim](https://github.com/leggedrobotics/sru-navigation-sim).
