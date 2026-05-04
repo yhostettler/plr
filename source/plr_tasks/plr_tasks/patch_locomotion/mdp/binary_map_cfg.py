@@ -13,8 +13,8 @@ class BinaryMapResetCfg:
     """Reset-time randomization of the global map."""
     NUM_RECTANGLES_MIN = 25
     NUM_RECTANGLES_MAX = 40
-    MIN_RECT_SIZE = 5
-    MAX_RECT_SIZE = 5
+    MIN_RECT_SIZE = 4
+    MAX_RECT_SIZE = 4
 
 
 class BinaryMapLocalCfg:
@@ -24,8 +24,8 @@ class BinaryMapLocalCfg:
     LOCAL_SIZE_M / LOCAL_RES = 64, so this gives a 64x64 map
     over a 6.4m x 6.4m local window.
     """
-    LOCAL_SIZE_M = 6.4
-    LOCAL_RES = 0.1
+    LOCAL_SIZE_M = 3.2
+    LOCAL_RES = 0.2
 
     LOCAL_H = int(round(LOCAL_SIZE_M / LOCAL_RES))
     LOCAL_W = int(round(LOCAL_SIZE_M / LOCAL_RES))
@@ -40,9 +40,6 @@ class BinaryMapLocalCfg:
     # Keep nearest for exact binary semantics.
     SAMPLE_MODE = "nearest"
 
-    # Helpful safety checks
-    assert LOCAL_H == 64
-    assert LOCAL_W == 64
 
 class BinaryMapMarkerCfg:
     """Visualization."""
