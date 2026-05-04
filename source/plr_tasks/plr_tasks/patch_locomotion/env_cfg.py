@@ -163,7 +163,7 @@ class ObservationsCfg:
             noise=Unoise(n_min=-0.1, n_max=0.1),
             clip=(-1.0, 1.0),
         )
-        #binary_map_local = ObsTerm(func=mdp.binary_map_local)
+        binary_map_local = ObsTerm(func=mdp.binary_map_local)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -190,7 +190,7 @@ class ObservationsCfg:
             noise=Unoise(n_min=-0.1, n_max=0.1),
             clip=(-1.0, 1.0),
         )
-        #binary_map_local = ObsTerm(func=mdp.binary_map_local)
+        binary_map_local = ObsTerm(func=mdp.binary_map_local)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -281,32 +281,37 @@ class EventCfg:
         params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
-    #binary map event setup
-    # binary_map_reset = EventTerm(
-    #     func=mdp.randomize_global_binary_map,
-    #     mode="reset",
-    #     params={
-    #         "map_h": BinaryMapGeomCfg.MAP_H,
-    #         "map_w": BinaryMapGeomCfg.MAP_W,
-    #         "map_res": BinaryMapGeomCfg.MAP_RES,
-    #         "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
-    #         "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
-    #         "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
-    #         "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
-    #         "add_border": BinaryMapGeomCfg.ADD_BORDER,
-    #     },
-    # )
+    # binary map: generate once at startup, refresh periodically
+    binary_map_init = EventTerm(
+        func=mdp.randomize_global_binary_map,
+        mode="startup",
+        params={
+            "map_h": BinaryMapGeomCfg.MAP_H,
+            "map_w": BinaryMapGeomCfg.MAP_W,
+            "map_res": BinaryMapGeomCfg.MAP_RES,
+            "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
+            "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
+            "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
+            "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
+            "add_border": BinaryMapGeomCfg.ADD_BORDER,
+        },
+    )
+    binary_map_refresh = EventTerm(
+        func=mdp.randomize_global_binary_map,
+        mode="interval",
+        interval_range_s=(500.0, 1000.0),
+        params={
+            "map_h": BinaryMapGeomCfg.MAP_H,
+            "map_w": BinaryMapGeomCfg.MAP_W,
+            "map_res": BinaryMapGeomCfg.MAP_RES,
+            "num_rectangles_min": BinaryMapResetCfg.NUM_RECTANGLES_MIN,
+            "num_rectangles_max": BinaryMapResetCfg.NUM_RECTANGLES_MAX,
+            "min_rect_size": BinaryMapResetCfg.MIN_RECT_SIZE,
+            "max_rect_size": BinaryMapResetCfg.MAX_RECT_SIZE,
+            "add_border": BinaryMapGeomCfg.ADD_BORDER,
+        },
+    )
 
-    # #binary map interval
-    # binary_map_interval_update = EventTerm(
-    #     func=mdp.update_dynamic_binary_patches,
-    #     mode="interval",
-    #     interval_range_s=BinaryMapIntervalCfg.INTERVAL_RANGE_S,
-    #     params={
-    #         "num_patches": BinaryMapIntervalCfg.NUM_PATCHES,
-    #         "patch_size": BinaryMapIntervalCfg.PATCH_SIZE,
-    #     },
-    # )
 
 
 @configclass
