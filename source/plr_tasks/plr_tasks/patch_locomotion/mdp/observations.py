@@ -37,15 +37,15 @@ def _ensure_bootstrap_global_binary_map(env: ManagerBasedRLEnv) -> None:
 
     if not hasattr(env, "plr_global_binary_map"):
         grid = torch.ones(
-            (env.num_envs, BinaryMapGeomCfg.MAP_H, BinaryMapGeomCfg.MAP_W),
+            (BinaryMapGeomCfg.MAP_H, BinaryMapGeomCfg.MAP_W),
             device=env.device,
             dtype=torch.float32,
         )
         if BinaryMapGeomCfg.ADD_BORDER:
-            grid[:, 0, :] = 0.0
-            grid[:, -1, :] = 0.0
-            grid[:, :, 0] = 0.0
-            grid[:, :, -1] = 0.0
+            grid[0, :] = 0.0
+            grid[-1, :] = 0.0
+            grid[:, 0] = 0.0
+            grid[:, -1] = 0.0
         env.plr_global_binary_map = grid
 
 
@@ -105,9 +105,9 @@ def binary_map_local(env: ManagerBasedRLEnv) -> torch.Tensor:
     """
     _ensure_bootstrap_global_binary_map(env)
 
-    global_map = env.plr_global_binary_map.float()  # (B,H,W)
-    map_h = global_map.shape[1]
-    map_w = global_map.shape[2]
+    global_map = env.plr_global_binary_map.float()  # (H,W)
+    map_h = global_map.shape[0]
+    map_w = global_map.shape[1]
 
     robot = env.scene["robot"]
     root_xy = robot.data.root_pos_w[:, :2]   # meters
@@ -141,7 +141,8 @@ def binary_map_local(env: ManagerBasedRLEnv) -> torch.Tensor:
     grid_y = (rows / (map_h - 1)) * 2.0 - 1.0
     grid = torch.stack([grid_x, grid_y], dim=-1)   # (B,64,64,2)
 
-    inp = global_map.unsqueeze(1)  # (B,1,H,W)
+    # Broadcast the single shared map across all envs for grid_sample.
+    inp = global_map.unsqueeze(0).unsqueeze(0).expand(env.num_envs, 1, map_h, map_w)  # (B,1,H,W)
     out = F.grid_sample(
         inp,
         grid,

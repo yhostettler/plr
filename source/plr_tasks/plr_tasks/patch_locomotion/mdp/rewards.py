@@ -242,15 +242,8 @@ def forbidden_patch_penalty(
 
     # Map dimensions in pixels, read from the tensor shape rather than the cfg
     # to stay correct even if the map is ever rebuilt at a different size.
-    map_h, map_w = env.plr_global_binary_map.shape[1], env.plr_global_binary_map.shape[2]
+    map_h, map_w = env.plr_global_binary_map.shape[0], env.plr_global_binary_map.shape[1]
 
-    # Subtract the map origin to get the foot position relative to pixel (0,0),
-    # then divide by map_res to convert metres to fractional pixel coordinates,
-    # then .long() truncates to the integer pixel index (floor towards zero).
-    # world X increases in the column direction; world Y in the row direction —
-    # this mirrors the convention used in binary_map_local (observations.py).
-    # .clamp() keeps the index inside [0, size-1] so a foot that has fallen or
-    # walked outside the map boundary never causes an out-of-bounds index error.
     col = ((foot_xy[:, :, 0] - origin_x) / map_res).long().clamp(0, map_w - 1)  # (num_envs, num_feet)
     row = ((foot_xy[:, :, 1] - origin_y) / map_res).long().clamp(0, map_h - 1)  # (num_envs, num_feet)
 
@@ -258,17 +251,8 @@ def forbidden_patch_penalty(
     # Step 4 — Look up the map value for every foot in every environment
     # -------------------------------------------------------------------------
 
-    # We need a matching env index for each (row, col) entry so we can do
-    # 3D fancy indexing: map[env_i, row_i, col_i].
-    # torch.arange gives (num_envs,); .unsqueeze(1) makes it (num_envs, 1);
-    # .expand(-1, num_feet) broadcasts it to (num_envs, num_feet) without
-    # copying memory (zero-copy view), which is cheaper than repeat_interleave.
-    env_ids = torch.arange(env.num_envs, device=env.device).unsqueeze(1).expand(-1, num_feet)
-
-    # Fancy-index the global map with three (num_envs, num_feet) tensors.
-    # Each entry map[env_ids[i,j], row[i,j], col[i,j]] is the map value for
-    # foot j of environment i — either 0.0 (forbidden) or 1.0 (allowed).
-    map_values = env.plr_global_binary_map[env_ids, row, col]  # (num_envs, num_feet)
+    # Shared (H, W) map: index with 2D (row, col) tensors directly.
+    map_values = env.plr_global_binary_map[row, col]  # (num_envs, num_feet)
 
     # -------------------------------------------------------------------------
     # Step 5 — Combine map and contact masks; return the per-env penalty signal

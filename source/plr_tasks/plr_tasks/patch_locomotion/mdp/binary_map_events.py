@@ -80,8 +80,11 @@ def randomize_global_binary_map(
     max_rect_size: int = BinaryMapResetCfg.MAX_RECT_SIZE,
     add_border: bool = BinaryMapGeomCfg.ADD_BORDER,
 ) -> None:
-    """
-    Randomize a global binary map for the selected environments.
+    """Regenerate the single shared binary map for all environments.
+
+    The map is a (H, W) tensor shared across all robots — every robot samples
+    its local crop from the same world. env_ids is accepted for API
+    compatibility but ignored; the whole map is always regenerated.
 
     Convention:
         0 = forbidden
@@ -89,29 +92,15 @@ def randomize_global_binary_map(
     """
     _ensure_map_metadata(env, map_h, map_w, map_res)
 
-    if env_ids is None:
-        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
-
-    if (
-        not hasattr(env, "plr_global_binary_map")
-        or env.plr_global_binary_map.shape != (env.num_envs, map_h, map_w)
-    ):
-        env.plr_global_binary_map = torch.ones(
-            (env.num_envs, map_h, map_w),
-            device=env.device,
-            dtype=torch.float32,
-        )
-
-    for env_id in env_ids.tolist():
-        num_rectangles = int(
-            torch.randint(num_rectangles_min, num_rectangles_max + 1, (1,), device=env.device).item()
-        )
-        env.plr_global_binary_map[env_id] = _sample_rectangles_map(
-            map_h=map_h,
-            map_w=map_w,
-            device=env.device,
-            num_rectangles=num_rectangles,
-            min_rect_size=min_rect_size,
-            max_rect_size=max_rect_size,
-            add_border=add_border,
-        )
+    num_rectangles = int(
+        torch.randint(num_rectangles_min, num_rectangles_max + 1, (1,), device=env.device).item()
+    )
+    env.plr_global_binary_map = _sample_rectangles_map(
+        map_h=map_h,
+        map_w=map_w,
+        device=env.device,
+        num_rectangles=num_rectangles,
+        min_rect_size=min_rect_size,
+        max_rect_size=max_rect_size,
+        add_border=add_border,
+    )
