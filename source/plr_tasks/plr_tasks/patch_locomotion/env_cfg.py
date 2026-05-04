@@ -51,7 +51,7 @@ EASY_TERRAINS_CFG = TerrainGeneratorCfg(
     use_cache=False,
     sub_terrains={
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=1.0, noise_range=(0.02, 0.08), noise_step=0.01, border_width=0
+            proportion=1.0, noise_range=(0.02, 0.04), noise_step=0.01, border_width=0
         ),
     },
 )
@@ -356,7 +356,7 @@ class RewardsCfg:
         },
     )
     # -- keep-alive: rewards surviving each step, counteracts early self-termination
-    alive = RewTerm(func=mdp.is_alive, weight=2.0)
+    alive = RewTerm(func=mdp.is_alive, weight=0.0)
     # -- optional penalties
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
@@ -379,6 +379,10 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+    alive_weight = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params={"term_name": "alive", "weight": 0.01, "num_steps": 100000},
+    )
 
 
 ##
@@ -432,6 +436,33 @@ class PLRPatchLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         self.rewards.flat_orientation_l2.weight = -5.0
         self.rewards.dof_torques_l2.weight = -2.5e-5
         self.rewards.feet_air_time.weight = 0.5
+
+
+@configclass
+class PLRBaseLocomotionEnvCfg(PLRPatchLocomotionEnvCfg):
+    """Same as PLRPatchLocomotionEnvCfg but without binary map observation or patch penalty."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.observations.policy.binary_map_local = None
+        self.observations.critic.binary_map_local = None
+        self.rewards.forbidden_patch = None
+
+
+@configclass
+class PLRBaseLocomotionEnvPlayCfg(PLRBaseLocomotionEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 16
+        self.scene.env_spacing = 2.5
+        self.scene.terrain.max_init_terrain_level = None
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 5
+            self.scene.terrain.terrain_generator.num_cols = 5
+            self.scene.terrain.terrain_generator.curriculum = False
+        self.observations.policy.enable_corruption = False
+        self.events.base_external_force_torque = None
+        self.events.push_robot = None
 
 
 @configclass

@@ -10,6 +10,8 @@ from plr_tasks.patch_locomotion.env import PLRLocomotionEnv
 from plr_tasks.patch_locomotion.env_cfg import (
     PLRPatchLocomotionEnvCfg,
     PLRPatchLocomotionEnvPlayCfg,
+    PLRBaseLocomotionEnvCfg,
+    PLRBaseLocomotionEnvPlayCfg,
 )
 
 from .agents.rsl_rl_cfg import AnymalDPatchPPORunnerCfg
@@ -34,6 +36,26 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": PLRPatchLocomotionEnvPlayCfg,
+        "rsl_rl_cfg_entry_point": AnymalDPatchPPORunnerCfg,
+    },
+)
+
+gym.register(
+    id="Isaac-Anymal-Base-v0",
+    entry_point="plr_tasks.patch_locomotion.env:PLRLocomotionEnv",
+    disable_env_checker=False,
+    kwargs={
+        "env_cfg_entry_point": PLRBaseLocomotionEnvCfg,
+        "rsl_rl_cfg_entry_point": AnymalDPatchPPORunnerCfg,
+    },
+)
+
+gym.register(
+    id="Isaac-Anymal-Base-Play-v0",
+    entry_point="plr_tasks.patch_locomotion.env:PLRLocomotionEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": PLRBaseLocomotionEnvPlayCfg,
         "rsl_rl_cfg_entry_point": AnymalDPatchPPORunnerCfg,
     },
 )
