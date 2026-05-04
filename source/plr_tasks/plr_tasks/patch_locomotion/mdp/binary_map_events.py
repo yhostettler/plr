@@ -7,6 +7,7 @@ from .binary_map_cfg import (
 )
 
 
+
 def _ensure_map_metadata(
     env: ManagerBasedRLEnv,
     map_h: int,
@@ -76,6 +77,69 @@ def _sample_rectangles_map(
     return grid
 
 
+def _chessboard_map(
+    map_h: int,
+    map_w: int,
+    device: torch.device,
+    patch_size: int,
+    stride: int,
+    add_border: bool,
+    jitter: int = BinaryMapResetCfg.CHESSBOARD_JITTER,
+    safe_center_half: int = BinaryMapGeomCfg.SAFE_CENTER_HALF,
+) -> torch.Tensor:
+    """Create a chessboard-style binary map with optional per-patch position jitter.
+
+    Patches are placed on every other grid position (where (i + j) % 2 == 0).
+    Each patch center is perturbed by a random offset in [-jitter, +jitter] cells,
+    so the edge-to-edge gap varies by ±2*jitter cells around the nominal value.
+
+    Convention: 0 = forbidden, 1 = allowed.
+    """
+    grid = torch.ones((map_h, map_w), device=device, dtype=torch.float32)
+
+    if add_border:
+        grid[0, :] = 0.0
+        grid[-1, :] = 0.0
+        grid[:, 0] = 0.0
+        grid[:, -1] = 0.0
+
+    n_rows = map_h // stride
+    n_cols = map_w // stride
+
+    # Center the grid in the map so the pattern is symmetric.
+    row_offset = (map_h - n_rows * stride) // 2
+    col_offset = (map_w - n_cols * stride) // 2
+
+    half = patch_size // 2
+
+    for i in range(n_rows):
+        for j in range(n_cols):
+            if (i + j) % 2 != 0:  # chessboard: skip every other position
+                continue
+
+            # Nominal patch center for this grid cell.
+            cy = row_offset + i * stride + stride // 2
+            cx = col_offset + j * stride + stride // 2
+
+            # Random per-patch jitter in [-jitter, +jitter].
+            if jitter > 0:
+                cy += int(torch.randint(-jitter, jitter + 1, (1,), device=device).item())
+                cx += int(torch.randint(-jitter, jitter + 1, (1,), device=device).item())
+
+            r0 = max(0, cy - half)
+            r1 = min(map_h, cy - half + patch_size)
+            c0 = max(0, cx - half)
+            c1 = min(map_w, cx - half + patch_size)
+            grid[r0:r1, c0:c1] = 0.0
+
+    # Always restore the central spawn zone.
+    cy_map, cx_map = map_h // 2, map_w // 2
+    grid[cy_map - safe_center_half : cy_map + safe_center_half,
+         cx_map - safe_center_half : cx_map + safe_center_half] = 1.0
+
+    return grid
+
+
 def randomize_global_binary_map(
     env: ManagerBasedRLEnv,
     env_ids: torch.Tensor | None,
@@ -87,6 +151,9 @@ def randomize_global_binary_map(
     min_rect_size: int = BinaryMapResetCfg.MIN_RECT_SIZE,
     max_rect_size: int = BinaryMapResetCfg.MAX_RECT_SIZE,
     add_border: bool = BinaryMapGeomCfg.ADD_BORDER,
+    use_chessboard: bool = BinaryMapResetCfg.USE_CHESSBOARD,
+    chessboard_stride: int = BinaryMapResetCfg.CHESSBOARD_STRIDE,
+    chessboard_jitter: int = BinaryMapResetCfg.CHESSBOARD_JITTER,
 ) -> None:
     """Regenerate the single shared binary map for all environments.
 
@@ -100,15 +167,26 @@ def randomize_global_binary_map(
     """
     _ensure_map_metadata(env, map_h, map_w, map_res)
 
-    num_rectangles = int(
-        torch.randint(num_rectangles_min, num_rectangles_max + 1, (1,), device=env.device).item()
-    )
-    env.plr_global_binary_map = _sample_rectangles_map(
-        map_h=map_h,
-        map_w=map_w,
-        device=env.device,
-        num_rectangles=num_rectangles,
-        min_rect_size=min_rect_size,
-        max_rect_size=max_rect_size,
-        add_border=add_border,
-    )
+    if use_chessboard:
+        env.plr_global_binary_map = _chessboard_map(
+            map_h=map_h,
+            map_w=map_w,
+            device=env.device,
+            patch_size=min_rect_size,
+            stride=chessboard_stride,
+            add_border=add_border,
+            jitter=chessboard_jitter,
+        )
+    else:
+        num_rectangles = int(
+            torch.randint(num_rectangles_min, num_rectangles_max + 1, (1,), device=env.device).item()
+        )
+        env.plr_global_binary_map = _sample_rectangles_map(
+            map_h=map_h,
+            map_w=map_w,
+            device=env.device,
+            num_rectangles=num_rectangles,
+            min_rect_size=min_rect_size,
+            max_rect_size=max_rect_size,
+            add_border=add_border,
+        )

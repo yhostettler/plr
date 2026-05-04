@@ -11,10 +11,19 @@ class BinaryMapGeomCfg:
 
 class BinaryMapResetCfg:
     """Reset-time randomization of the global map."""
+    # --- random rectangle map ---
     NUM_RECTANGLES_MIN = 80
     NUM_RECTANGLES_MAX = 100
     MIN_RECT_SIZE = 4
     MAX_RECT_SIZE = 4
+
+    # --- chessboard map ---
+    USE_CHESSBOARD = True
+    # Center-to-center distance between patches (cells).
+    # 24 = 6 × patch_size(4) → 5-patch-size edge-to-edge gap.
+    CHESSBOARD_STRIDE = 24
+    # Per-patch position jitter (cells). ±2 cells → gap varies ±1 patch size (4–6 patch sizes).
+    CHESSBOARD_JITTER = 2
 
 
 class BinaryMapLocalCfg:
