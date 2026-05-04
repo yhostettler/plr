@@ -6,6 +6,7 @@ class BinaryMapGeomCfg:
     MAP_H = 320
     MAP_W = 320
     ADD_BORDER = False
+    SAFE_CENTER_HALF = 20  # cells kept free around the map center (+-20 cells -> 40x40 safety grid)
 
 
 class BinaryMapResetCfg:

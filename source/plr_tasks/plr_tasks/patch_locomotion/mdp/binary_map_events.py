@@ -33,6 +33,7 @@ def _sample_rectangles_map(
     min_rect_size: int,
     max_rect_size: int,
     add_border: bool,
+    safe_center_half: int = BinaryMapGeomCfg.SAFE_CENTER_HALF,
 ) -> torch.Tensor:
     """
     Create a random binary map with rectangular forbidden regions.
@@ -40,6 +41,9 @@ def _sample_rectangles_map(
     Convention:
         0 = forbidden
         1 = allowed
+
+    A square of side 2*safe_center_half centered on the map is always kept free,
+    regardless of where rectangles are placed.
     """
     grid = torch.ones((map_h, map_w), device=device, dtype=torch.float32)
 
@@ -64,6 +68,10 @@ def _sample_rectangles_map(
         left = int(torch.randint(col_min, max_left, (1,), device=device).item())
 
         grid[top : top + rect_h, left : left + rect_w] = 0.0
+
+    # Always restore the central spawn zone — robots always start here. Tipp: set to 0.0 to visually inspect area as forbidden zone
+    cy, cx = map_h // 2, map_w // 2
+    grid[cy - safe_center_half : cy + safe_center_half, cx - safe_center_half : cx + safe_center_half] = 1.0
 
     return grid
 
