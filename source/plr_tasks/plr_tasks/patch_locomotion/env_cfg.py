@@ -437,6 +437,13 @@ class PLRPatchLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         self.rewards.dof_torques_l2.weight = -2.5e-5
         self.rewards.feet_air_time.weight = 0.5
 
+        # Adjust Camera Position (for --video flag in train.py)
+        self.viewer.eye = (10, 10, 10)       # camera position (x, y, z) in meters
+        self.viewer.lookat = (0.0, 0.0, 0.0)    # point the camera looks at
+        self.viewer.resolution = (1280, 720)    # video resolution
+
+
+
 
 @configclass
 class PLRBaseLocomotionEnvCfg(PLRPatchLocomotionEnvCfg):
