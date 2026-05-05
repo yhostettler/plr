@@ -118,7 +118,7 @@ class CommandsCfg:
 
     base_velocity = mdp.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(20.0, 30.0),
+        resampling_time_range=(10.0, 20.0),
         rel_standing_envs=0.0,
         rel_heading_envs=1.0,
         heading_command=True,
@@ -411,7 +411,7 @@ class PLRPatchLocomotionEnvCfg(ManagerBasedRLEnvCfg):
 
     def __post_init__(self):
         self.decimation = 4
-        self.episode_length_s = 40.0
+        self.episode_length_s = 20.0
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
