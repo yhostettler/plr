@@ -381,7 +381,7 @@ class CurriculumCfg:
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
     alive_weight = CurrTerm(
         func=mdp.modify_reward_weight,
-        params={"term_name": "alive", "weight": 0.01, "num_steps": 100000},
+        params={"term_name": "alive", "weight": 0.1, "num_steps": 100000},
     )
 
 
@@ -433,7 +433,7 @@ class PLRPatchLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         self.events.physics_material.params["static_friction_range"] = (0.6, 1.2)
         self.events.physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
 
-        self.rewards.flat_orientation_l2.weight = -5.0
+        self.rewards.flat_orientation_l2.weight = -1.5 # was -5.0, changed since we have some roughness in terrain
         self.rewards.dof_torques_l2.weight = -2.5e-5
         self.rewards.feet_air_time.weight = 0.5
 
