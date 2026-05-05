@@ -51,7 +51,7 @@ EASY_TERRAINS_CFG = TerrainGeneratorCfg(
     use_cache=False,
     sub_terrains={
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=1.0, noise_range=(0.02, 0.04), noise_step=0.01, border_width=0
+            proportion=1.0, noise_range=(0.02, 0.06), noise_step=0.01, border_width=0
         ),
     },
 )
@@ -118,7 +118,7 @@ class CommandsCfg:
 
     base_velocity = mdp.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(10.0, 20.0),
+        resampling_time_range=(10.0, 10.0),
         rel_standing_envs=0.0,
         rel_heading_envs=1.0,
         heading_command=True,
@@ -347,7 +347,7 @@ class RewardsCfg:
     # -- binary map penalty: fires when any foot contacts a forbidden map cell
     forbidden_patch = RewTerm(
         func=mdp.forbidden_patch_penalty,
-        weight=-0.5,
+        weight=-5.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*FOOT"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*FOOT"),
