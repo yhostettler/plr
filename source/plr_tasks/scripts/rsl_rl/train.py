@@ -167,6 +167,7 @@ def main() -> None:
         log_dir=log_dir,
         device=agent_cfg.device,
     )
+    runner.add_git_repo_to_log(plr_tasks.__file__) 
 
     # -------------------------------------------------------------------------
     # Resume from checkpoint (if requested)
