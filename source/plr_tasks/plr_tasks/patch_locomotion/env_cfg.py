@@ -356,7 +356,7 @@ class RewardsCfg:
         },
     )
     # -- keep-alive: rewards surviving each step, counteracts early self-termination
-    alive = RewTerm(func=mdp.is_alive, weight=0.0)
+    alive = RewTerm(func=mdp.is_alive, weight=1.0)
     # -- optional penalties
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
@@ -379,10 +379,6 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
-    alive_weight = CurrTerm(
-        func=mdp.modify_reward_weight,
-        params={"term_name": "alive", "weight": 0.1, "num_steps": 100000},
-    )
 
 
 ##
